@@ -1,0 +1,6 @@
+{
+  "name": "@zsyy/admin", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "dev": "vite --host 0.0.0.0 --port 3013 --strictPort", "build": "vite build" },
+  "dependencies": { "vue": "3.5.27", "element-plus": "2.13.1" },
+  "devDependencies": { "vite": "5.4.21", "@vitejs/plugin-vue": "6.0.3" }
+}

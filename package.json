@@ -1,0 +1,29 @@
+{
+  "name": "zsyy-mall",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:mobile": "node scripts/dev.mjs mobile",
+    "dev:admin": "node scripts/dev.mjs admin",
+    "dev:backend": "node scripts/dev.mjs backend",
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs",
+    "test:unit": "node --test packages/shared/demo.test.mjs",
+    "test:ui": "vitest run --config vitest.config.mjs",
+    "test:backend": "node --test --test-concurrency=1 packages/backend/tests/api.test.mjs",
+    "db:init": "node packages/backend/src/initialize.js",
+    "db:reconcile": "node packages/backend/src/maintenance.js reconcile",
+    "smoke": "node scripts/smoke.mjs",
+    "setup:local": "node scripts/setup-local.mjs"
+  },
+  "devDependencies": {
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "26.1.0",
+    "vitest": "2.1.9"
+  }
+}

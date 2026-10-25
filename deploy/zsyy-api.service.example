@@ -1,0 +1,17 @@
+[Unit]
+Description=Zsyy voucher mall API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/srv/zsyy
+Environment=NODE_ENV=production
+Environment=PORT=3020
+ExecStart=/usr/bin/node /srv/zsyy/packages/backend/src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

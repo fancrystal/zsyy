@@ -1,0 +1,2 @@
+<script setup>defineProps({page:Number,total:Number,pageSize:{type:Number,default:20},disabled:Boolean});defineEmits(['change'])</script>
+<template><div class="pager"><span>共 {{ total }} 条 · 第 {{ page }} / {{ Math.max(1,Math.ceil(total/pageSize)) }} 页</span><button class="secondary" :disabled="disabled||page<=1" @click="$emit('change',page-1)">上一页</button><button class="secondary" :disabled="disabled||page*pageSize>=total" @click="$emit('change',page+1)">下一页</button></div></template>
