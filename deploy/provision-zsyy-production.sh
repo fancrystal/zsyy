@@ -65,7 +65,20 @@ set -a
 . "$ENV_FILE"
 set +a
 
-mysql --protocol=socket <<SQL
+mysql_command=(mysql --protocol=socket)
+if ! "${mysql_command[@]}" -e 'SELECT 1' >/dev/null 2>&1; then
+  : "${MYSQL_ADMIN_ENV_FILE:?Set MYSQL_ADMIN_ENV_FILE to an existing protected MySQL credential file.}"
+  [[ -r "$MYSQL_ADMIN_ENV_FILE" ]] || { echo 'MySQL administrator credential file is not readable.' >&2; exit 1; }
+  set -a
+  . "$MYSQL_ADMIN_ENV_FILE"
+  set +a
+  : "${DB_HOST:?DB_HOST missing in MYSQL_ADMIN_ENV_FILE}"
+  : "${DB_USER:?DB_USER missing in MYSQL_ADMIN_ENV_FILE}"
+  : "${DB_PASSWORD:?DB_PASSWORD missing in MYSQL_ADMIN_ENV_FILE}"
+  mysql_command=(mysql --protocol=TCP --host="$DB_HOST" --port="${DB_PORT:-3306}" --user="$DB_USER" "--password=$DB_PASSWORD")
+fi
+
+"${mysql_command[@]}" <<SQL
 CREATE DATABASE IF NOT EXISTS \`$DATABASE_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER IF NOT EXISTS '$DATABASE_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
 ALTER USER '$DATABASE_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
