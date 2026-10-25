@@ -1,0 +1,24 @@
+[Unit]
+Description=Zsyy voucher mall API
+After=network.target mysqld.service
+Wants=mysqld.service
+
+[Service]
+Type=simple
+User=zsyy
+Group=zsyy
+WorkingDirectory=/opt/zsyy/current
+EnvironmentFile=/etc/zsyy/zsyy.env
+ExecStart=/usr/bin/node /opt/zsyy/current/packages/backend/src/index.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
