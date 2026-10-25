@@ -19,7 +19,8 @@
     "db:init": "node packages/backend/src/initialize.js",
     "db:reconcile": "node packages/backend/src/maintenance.js reconcile",
     "smoke": "node scripts/smoke.mjs",
-    "setup:local": "node scripts/setup-local.mjs"
+    "setup:local": "node scripts/setup-local.mjs",
+    "seed:approved-test-team": "node scripts/seed-approved-test-team.mjs"
   },
   "devDependencies": {
     "@vue/test-utils": "2.4.6",

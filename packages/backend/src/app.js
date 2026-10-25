@@ -37,7 +37,7 @@ export function createApp(db,options={}){
   app.get('/api/products',asyncRoute(async(req,res)=>send(res,await catalog.listProducts(db,req.query))))
   app.get('/api/products/:id',asyncRoute(async(req,res)=>send(res,await catalog.getProduct(db,pathId(req)))))
   app.get('/api/categories',asyncRoute(async(req,res)=>send(res,(await rows(db,"SELECT DISTINCT category FROM products WHERE is_active=1 AND category<>'' ORDER BY category")).map(r=>r.category))))
-  app.post('/api/auth/register',asyncRoute(async(req,res)=>{const input=body(req,z.object({username:z.string().trim().regex(/^[a-zA-Z0-9_-]{3,50}$/),password:z.string().min(10).max(72),nickname:text(60).optional(),inviteCode:text(32)}).strict());const user=await accounts.register(db,input);loginCookie(res,'user',user);send(res,user,201)}))
+  app.post('/api/auth/register',asyncRoute(async(req,res)=>{const input=body(req,z.object({username:z.string().trim().regex(/^1[3-9]\d{9}$/),password:z.string().min(6).max(72),nickname:text(60),inviteCode:text(32)}).strict());const user=await accounts.register(db,input);loginCookie(res,'user',user);send(res,user,201)}))
   for(const role of ['user','admin']){
     const base=role==='admin'?'/api/admin/auth':'/api/auth'
     app.post(`${base}/login`,asyncRoute(async(req,res)=>{const input=body(req,loginSchema),user=await accounts.login(db,input.username,input.password,role==='admin');loginCookie(res,role,user);send(res,user)}))

@@ -6,12 +6,13 @@ import { createDatabase } from '../src/db/database.js'
 import { initialize } from '../src/initialize.js'
 import { config } from '../src/config.js'
 
-let db, app, admin, root, invite, productId
+let db, app, admin, root, invite, productId, teamDPhone
 const pass='test-password-2026'
 const key=()=>crypto.randomUUID()
+let phoneSequence=18800000100
 async function register(name, inviteCode=invite) {
   const agent=request.agent(app)
-  const r=await agent.post('/api/auth/register').send({username:name,password:pass,nickname:name,inviteCode})
+  const r=await agent.post('/api/auth/register').send({username:String(phoneSequence++),password:pass,nickname:name,inviteCode})
   assert.equal(r.status,201,JSON.stringify(r.body)); return {agent,user:r.body.data}
 }
 async function grant(userId, amountUnits, idempotencyKey=key()) {
@@ -46,7 +47,15 @@ test('registration binds one immutable parent, validates invitation and starts w
   assert.equal((await agent.get('/api/me/wallet')).body.data.balanceUnits,0)
   assert.equal((await agent.patch('/api/me').send({nickname:'新昵称',parentId:'999'})).status,400)
   assert.equal((await request(app).post('/api/auth/register').send({username:'invalid-a',password:pass,inviteCode:'INVALID'})).status,400)
-  assert.equal((await request(app).post('/api/auth/register').send({username:'member-a',password:pass,inviteCode:invite})).status,409)
+  assert.equal((await request(app).post('/api/auth/register').send({username:user.username,password:pass,nickname:'重复手机号',inviteCode:invite})).status,409)
+})
+test('registration uses a mainland mobile account, requires a display username, and accepts six-character passwords',async()=>{
+  const accepted=await request(app).post('/api/auth/register').send({username:'18800000007',password:'123456',nickname:'星河',inviteCode:invite})
+  assert.equal(accepted.status,201,JSON.stringify(accepted.body))
+  assert.equal(accepted.body.data.username,'18800000007')
+  assert.equal(accepted.body.data.nickname,'星河')
+  assert.equal((await request(app).post('/api/auth/register').send({username:'member_name',password:'123456',nickname:'无效账号',inviteCode:invite})).status,400)
+  assert.equal((await request(app).post('/api/auth/register').send({username:'18800000002',password:'123456',inviteCode:invite})).status,400)
 })
 test('grants are persistent and idempotent; same key with different content conflicts',async()=>{
   const {agent,user}=await register('grant-member'); const id=key()
@@ -82,7 +91,7 @@ test('parallel orders cannot overspend and failed transactions leave no order',a
 })
 test('all ancestors receive market consumption and cumulative 10 percent differences exactly once',async()=>{
   const a=await register('team-parent'); const b=await register('team-b',a.user.inviteCode), c=await register('team-c',a.user.inviteCode), d=await register('team-d',a.user.inviteCode)
-  const e=await register('team-e',b.user.inviteCode)
+  const e=await register('team-e',b.user.inviteCode); teamDPhone=d.user.username
   for(const member of [b,c,d,e]) {await grant(member.user.id,5000000);await address(member.agent)}
   assert.equal((await buy(e.agent,1000000)).status,201)
   const parallel=await Promise.all([buy(c.agent,600000),buy(d.agent,400000)])
@@ -125,12 +134,12 @@ test('reconciliation resumes a persisted cursor in small batches',async()=>{
   assert.equal(Number(record.scanned),Number(max.total));assert.equal(record.phase,'complete')
 })
 test('a detected paid-total mismatch quarantines the beneficiary before another purchase can pay again',async()=>{
-  const [[a]]=await db.execute("SELECT id FROM users WHERE username='team-parent'")
+  const [[a]]=await db.execute("SELECT id FROM users WHERE nickname='team-parent'")
   const [[before]]=await db.execute('SELECT balance_units FROM wallets WHERE user_id=?',[a.id])
   await db.execute('UPDATE rebate_accounts SET paid_units=0 WHERE user_id=?',[a.id])
   const job=await admin.post('/api/admin/jobs/reconcile').set('Idempotency-Key',key()).send({});assert.equal(job.status,200);assert.equal(job.body.data.status,'anomalies')
   const [[account]]=await db.execute('SELECT has_anomaly FROM rebate_accounts WHERE user_id=?',[a.id]);assert.equal(account.has_anomaly,1)
-  const buyer=request.agent(app);await buyer.post('/api/auth/login').send({username:'team-d',password:pass})
+  const buyer=request.agent(app);await buyer.post('/api/auth/login').send({username:teamDPhone,password:pass})
   assert.equal((await buy(buyer,10000)).status,201)
   const [[after]]=await db.execute('SELECT balance_units FROM wallets WHERE user_id=?',[a.id]);assert.equal(after.balance_units,before.balance_units)
 })
@@ -148,4 +157,15 @@ test('an inconsistent wallet is refused and its anomaly remains recorded after t
   const [[account]]=await db.execute('SELECT has_anomaly FROM rebate_accounts WHERE user_id=?',[member.user.id]);assert.equal(account.has_anomaly,1)
   const [[issue]]=await db.execute("SELECT COUNT(*) AS total FROM reconciliation_issues WHERE user_id=? AND type='wallet_balance'",[member.user.id]);assert.equal(Number(issue.total),1)
   assert.equal((await member.agent.get('/api/orders')).body.data.total,0)
+})
+test('approved six-person phone test team has fixed parents and is idempotent',async()=>{
+  const {seedApprovedTestTeam}=await import('../src/services/test-team.js')
+  const first=await seedApprovedTestTeam(db)
+  const second=await seedApprovedTestTeam(db)
+  assert.equal(first.length,6);assert.equal(second.length,6)
+  const [members]=await db.execute("SELECT u.username,u.nickname,p.username AS parent_phone FROM users u LEFT JOIN users p ON p.id=u.parent_id WHERE u.username BETWEEN '18800000001' AND '18800000006' ORDER BY u.username")
+  assert.deepEqual(members.map(member=>[member.username,member.nickname,member.parent_phone]),[
+    ['18800000001','星河','root'],['18800000002','晨曦','18800000001'],['18800000003','远山','18800000001'],['18800000004','清风','18800000002'],['18800000005','沐阳','18800000002'],['18800000006','知夏','18800000003']
+  ])
+  for(const member of members)assert.equal((await request(app).post('/api/auth/login').send({username:member.username,password:'123456'})).status,200)
 })
