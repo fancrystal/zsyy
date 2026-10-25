@@ -5,6 +5,7 @@ set -euo pipefail
 readonly APP_USER=zsyy
 readonly APP_GROUP=zsyy
 readonly APP_ROOT=/opt/zsyy
+readonly PUBLIC_ROOT=/var/www/zsyy
 readonly ENV_DIR=/etc/zsyy
 readonly ENV_FILE=/etc/zsyy/zsyy.env
 readonly CREDENTIALS_FILE=/root/zsyy-initial-accounts.txt
@@ -23,6 +24,7 @@ if ! id "$APP_USER" >/dev/null 2>&1; then
 fi
 
 install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$APP_ROOT" "$APP_ROOT/releases"
+install -d -o root -g root -m 0755 "$PUBLIC_ROOT" "$PUBLIC_ROOT/releases"
 install -d -o root -g "$APP_GROUP" -m 0750 "$ENV_DIR"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -64,6 +66,7 @@ fi
 set -a
 . "$ENV_FILE"
 set +a
+zsyy_database_password="$DB_PASSWORD"
 
 mysql_command=(mysql --protocol=socket)
 if ! "${mysql_command[@]}" -e 'SELECT 1' >/dev/null 2>&1; then
@@ -80,9 +83,9 @@ fi
 
 "${mysql_command[@]}" <<SQL
 CREATE DATABASE IF NOT EXISTS \`$DATABASE_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-CREATE USER IF NOT EXISTS '$DATABASE_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
-ALTER USER '$DATABASE_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP ON \`$DATABASE_NAME\`.* TO '$DATABASE_USER'@'localhost';
+CREATE USER IF NOT EXISTS '$DATABASE_USER'@'localhost' IDENTIFIED BY '$zsyy_database_password';
+ALTER USER '$DATABASE_USER'@'localhost' IDENTIFIED BY '$zsyy_database_password';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, DROP ON \`$DATABASE_NAME\`.* TO '$DATABASE_USER'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
