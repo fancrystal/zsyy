@@ -34,7 +34,7 @@
 
 ### `wallet_ledger`
 
-`id`；`user_id`；`type`（admin_grant / order_spend / team_rebate / manual_adjustment）；`amount_units`（有符号）；`balance_before_units`；`balance_after_units`；`source_key`；`admin_id` 可空；`note`；`created_at`。
+`id`；`user_id`；`type`（admin_grant / order_spend / direct_referral_reward / team_rebate / manual_adjustment）；`amount_units`（有符号）；`balance_before_units`；`balance_after_units`；`source_key`；`admin_id` 可空；`note`；`created_at`。
 
 `source_key` 全局唯一，如 `order:123:spend`、`rebate:456`、`grant:789`。索引 `(user_id, id)`。流水只追加，不覆盖或删除；合法调整以新流水表达。每条流水须满足前余额加变动等于后余额。
 
@@ -49,6 +49,10 @@
 `id`；唯一 `order_no`；`user_id`；`product_id`；`product_snapshot`（名称、图片、单价）；`quantity`；`total_units`；`address_snapshot`；`idempotency_key`；`request_hash`；`created_at`。
 
 唯一 `(user_id, idempotency_key)`；索引 `(user_id, id)` 和 `(created_at, id)`。快照使用 JSON，快照内金额使用整数字符串。首版一单一商品，不设状态机或订单明细表；成功事务才保留订单，失败整体回滚。`total_units` 必须等于快照单价乘数量。
+
+### `direct_referral_rewards`
+
+`id`；唯一 `order_id`；`beneficiary_user_id`（购买人的直接上级）；`buyer_user_id`；`order_total_units`；固定 `rate_bps=2000`；`reward_units`；`created_at`。每条记录对应一条 `direct_referral_reward` 正向钱包流水，金额为 `floor(order_total_units × 20 / 100)`；用于订单创建后即时入账，不由每日补查重算或追溯历史订单。
 
 ## 团队消费与返利
 
@@ -88,7 +92,7 @@
 
 1. 钱包余额等于全部账务流水净额，初始化余额为 0。
 2. 每个成功订单对应且仅对应一条负向消费流水。
-3. 每条成功返利记录对应且仅对应一条正向返利流水。
+3. 每条成功团队返利记录和直推收益记录分别对应且仅对应一条正向钱包流水。
 4. 已发返利累计等于返利明细之和。
 5. 每个市场累计消费等于所属全部用户的成功订单金额之和。
 6. 团队无环，订单快照完整，所有账务关联可追溯。

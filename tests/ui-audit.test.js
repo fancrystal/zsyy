@@ -94,6 +94,15 @@ test('personal ledger, team, rebate and invitation controls open their actual co
   document.querySelectorAll('.menu-group button')[1].click(); await tick(); expect(document.querySelector('.invite-code').textContent).toBe('ZS8K26'); await click('关闭')
   document.querySelector('.menu-group a').click(); await tick(); expect(router.currentRoute.value.path).toBe('/orders')
 })
+test('personal wallet keeps team rebates separate while showing direct referral reward ledger entries', async () => {
+  const seed=createDemoState()
+  seed.ledger.unshift({id:'direct-referral-1',type:'direct_referral_reward',title:'直推收益',note:'直属下线订单 20% 收益',amountUnits:2000,beforeUnits:268000,afterUnits:270000,createdAt:'2026-10-27 10:00:00'})
+  update(seed)
+  await mountMobile('/me')
+  expect(document.querySelector('.wallet-bottom').textContent).toContain('累计团队返利')
+  await click('收支明细')
+  expect(document.querySelector('dialog').textContent).toContain('直推收益')
+})
 test('all eight admin navigation entries open their intended view and overview shortcuts work', async () => {
   await mountAdmin()
   for (const item of [...document.querySelectorAll('nav[aria-label="后台菜单"] button')]) {

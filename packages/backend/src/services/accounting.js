@@ -64,6 +64,15 @@ export async function ancestors(conn,buyerId){
     chain.push({owner:String(u.parent_id),child});child=String(u.parent_id)
   }return chain
 }
+async function directReferralReward(conn,orderId,buyerId,orderTotalUnits){
+  const buyer=await one(conn,'SELECT parent_id FROM users WHERE id=? FOR UPDATE',[buyerId])
+  if(buyer.parent_id===null)return null
+  if(!await accountIntegrity(conn,String(buyer.parent_id)))return null
+  const rewardUnits=safeNumber(BigInt(orderTotalUnits)*20n/100n)
+  const result=await rows(conn,'INSERT INTO direct_referral_rewards(order_id,beneficiary_user_id,buyer_user_id,order_total_units,rate_bps,reward_units) VALUES(?,?,?,?,2000,?)',[orderId,buyer.parent_id,buyerId,orderTotalUnits,rewardUnits])
+  await changeBalance(conn,buyer.parent_id,rewardUnits,{type:'direct_referral_reward',title:'直推收益',note:'直属下线订单 20% 收益',sourceKey:`direct-referral:${result.insertId}`})
+  return String(result.insertId)
+}
 export async function purchase(db,userId,input,key){const outcome=await transaction(db,async conn=>{
   const fingerprint=hash([input.productId,input.quantity,input.expectedPriceUnits]),existing=await one(conn,'SELECT * FROM orders WHERE user_id=? AND idempotency_key=?',[userId,key])
   if(existing){if(existing.request_hash!==fingerprint)fail(409,'IDEMPOTENCY_CONFLICT','相同请求编号的内容不一致');return {order:orderView(existing),replayed:true}}
@@ -75,6 +84,7 @@ export async function purchase(db,userId,input,key){const outcome=await transact
   const result=await rows(conn,'INSERT INTO orders(order_no,user_id,product_id,product_snapshot,address_snapshot,quantity,total_units,idempotency_key,request_hash) VALUES(?,?,?,?,?,?,?,?,?)',[`ZS${Date.now()}${randomUUID().slice(0,8)}`,userId,input.productId,JSON.stringify(product),JSON.stringify(address),input.quantity,total,key,fingerprint])
   const id=String(result.insertId)
   const balanceUnits=await changeBalance(conn,userId,-total,{type:'order_spend',title:'商品购买',note:`${product.name} × ${input.quantity}`,sourceKey:`order:${id}`})
+  await directReferralReward(conn,id,userId,total)
   for(const item of chain){
     await rows(conn,'INSERT INTO team_market_totals(owner_user_id,direct_child_user_id,consumption_units) VALUES(?,?,?) ON DUPLICATE KEY UPDATE consumption_units=consumption_units+VALUES(consumption_units)',[item.owner,item.child,total])
     await settle(conn,item.owner,'order',id)
