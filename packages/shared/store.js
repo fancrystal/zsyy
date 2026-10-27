@@ -3,8 +3,15 @@ import * as demo from './demo-store.js'
 import { api, queryString } from './api.js'
 export const isDemo=new URLSearchParams(window.location.search).get('preview')==='1'
 const emptySummary=()=>({total:0,largest:0,eligible:0,entitled:0,paid:0,pending:0})
+const emptyIncome=()=>({summary:{referralUnits:0,teamUnits:0,totalUnits:0},referral:{items:[],page:1,total:0},team:{items:[],page:1,total:0}})
 const live=ref({company:{name:'产品券商城',tagline:'把品质，带进日常',intro:'',body:'',images:[]},profile:null,balanceUnits:0,address:null,products:[],categories:[],orders:[],ledger:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,productPage:{page:1,total:0,pageSize:20},orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})
 export const state=isDemo?demo.state:live
+live.value.income=emptyIncome()
+export const income=computed(()=>{
+  if(!isDemo)return state.value.income
+  const referralItems=state.value.ledger.filter(item=>item.type==='direct_referral_reward'),referralUnits=referralItems.reduce((sum,item)=>sum+item.amountUnits,0),teamUnits=state.value.paidRebateUnits
+  return {summary:{referralUnits,teamUnits,totalUnits:referralUnits+teamUnits},referral:{items:referralItems},team:{items:state.value.rebates}}
+})
 export const rebate=isDemo?demo.rebate:computed(()=>state.value.summary)
 export const largestMarketId=isDemo?demo.largestMarketId:computed(()=>state.value.largestMarketId)
 export const update=demo.update
@@ -13,18 +20,31 @@ export const editProduct=demo.editProduct
 export const saveCompany=demo.saveCompany
 export const grant=demo.grant
 let productSequence=0,orderSequence=0,sessionVersion=0
-function clearPersonal(){sessionVersion++;Object.assign(state.value,{profile:null,balanceUnits:0,address:null,orders:[],ledger:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})}
+function clearPersonal(){sessionVersion++;state.value.income=emptyIncome();Object.assign(state.value,{profile:null,balanceUnits:0,address:null,orders:[],ledger:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})}
 export async function loadProducts(params={},append=false){if(isDemo)return;const seq=++productSequence,data=await api(`/products${queryString(params)}`);if(seq!==productSequence)return;state.value.products=append?[...state.value.products,...data.items]:data.items;state.value.productPage=data}
 export async function loadOrders(params={},append=false){if(isDemo)return;const seq=++orderSequence,version=sessionVersion,data=await api(`/orders${queryString(params)}`);if(seq!==orderSequence||version!==sessionVersion)return;state.value.orders=append?[...state.value.orders,...data.items]:data.items;state.value.orderPage=data;state.value.orderTotalUnits=data.totalSpentUnits}
 export async function loadLedger(page=1){if(isDemo)return;const version=sessionVersion,data=await api(`/me/wallet/ledger?page=${page}`);if(version!==sessionVersion)return;state.value.ledger=page===1?data.items:[...state.value.ledger,...data.items];state.value.ledgerPage=data}
 export async function loadRebates(page=1){if(isDemo)return;const version=sessionVersion,data=await api(`/me/rebates?page=${page}`);if(version!==sessionVersion)return;state.value.rebates=page===1?data.items:[...state.value.rebates,...data.items];state.value.rebatePage=data;state.value.summary=data.summary;state.value.paidRebateUnits=data.summary.paid}
+let incomeSequence=0
+export async function loadIncome(category){
+  if(isDemo)return
+  const version=sessionVersion,seq=++incomeSequence,current=state.value.income
+  const pages={referralPage:current.referral.page,teamPage:current.team.page}
+  if(category)pages[`${category}Page`]++
+  else Object.assign(pages,{referralPage:1,teamPage:1})
+  const data=await api(`/me/income${queryString(pages)}`)
+  if(version!==sessionVersion||seq!==incomeSequence)return
+  if(category){const next=data[category];state.value.income={...current,summary:data.summary,[category]:{...next,items:[...current[category].items,...next.items]}}}
+  else state.value.income=data
+}
 export async function refreshSession(){
   if(isDemo)return
-  const version=sessionVersion
+  const version=sessionVersion,incomeVersion=incomeSequence
   try{const profile=await api('/me');if(version!==sessionVersion)return;state.value.profile=profile}catch(error){if(error.status!==401)throw error;if(version===sessionVersion)clearPersonal();return}
   const [wallet,address,team]=await Promise.all([api('/me/wallet'),api('/me/address'),api('/me/team')])
   if(version!==sessionVersion)return
   Object.assign(state.value,{balanceUnits:wallet.balanceUnits,address,markets:team.markets,summary:team.summary,paidRebateUnits:team.summary.paid,largestMarketId:team.largestMarketId})
+  if(incomeVersion===incomeSequence)state.value.income.summary=team.incomeSummary||emptyIncome().summary
 }
 export async function loadCategories(){if(isDemo)return;state.value.categories=await api('/categories')}
 export async function bootstrap(){if(isDemo)return;const [company,categories]=await Promise.all([api('/company'),api('/categories')]);Object.assign(state.value,{company,categories});await refreshSession()}

@@ -2,13 +2,22 @@ import { rows, one } from '../db/database.js'
 import { safeNumber } from '../errors.js'
 import { publicUser, me, getAddress } from './accounts.js'
 import { paginate } from './catalog.js'
-import { marketSummary, dateView, wallet } from './accounting.js'
+import { marketSummary, dateView, wallet, ledgerView } from './accounting.js'
+export async function incomeSummary(db,userId){
+  const sums=await one(db,"SELECT COALESCE(SUM(CASE WHEN type='direct_referral_reward' THEN amount_units ELSE 0 END),0) AS referral,COALESCE(SUM(CASE WHEN type='team_rebate' THEN amount_units ELSE 0 END),0) AS team FROM wallet_ledger WHERE user_id=? AND type IN ('direct_referral_reward','team_rebate')",[userId])
+  return {referralUnits:safeNumber(sums.referral),teamUnits:safeNumber(sums.team),totalUnits:safeNumber(BigInt(sums.referral)+BigInt(sums.team))}
+}
+export async function incomeRecords(db,userId,query={}){
+  const category=(type,page)=>paginate(db,'SELECT * FROM wallet_ledger WHERE user_id=? AND type=? ORDER BY id DESC','SELECT COUNT(*) AS total FROM wallet_ledger WHERE user_id=? AND type=?',[userId,type],{page,pageSize:query.pageSize},ledgerView)
+  const [summary,referral,team]=await Promise.all([incomeSummary(db,userId),category('direct_referral_reward',query.referralPage),category('team_rebate',query.teamPage)])
+  return {summary,referral,team}
+}
 export async function teamInfo(db,id){
   const info=await marketSummary(db,id),users=await rows(db,'SELECT id,parent_id FROM users')
   const children=new Map()
   for(const u of users){const parent=String(u.parent_id);if(!children.has(parent))children.set(parent,[]);children.get(parent).push(String(u.id))}
   for(const market of info.markets){const stack=[market.id],seen=new Set();while(stack.length){const next=stack.pop();if(seen.has(next))continue;seen.add(next);stack.push(...(children.get(next)||[]))}market.members=seen.size}
-  return info
+  return {...info,incomeSummary:await incomeSummary(db,id)}
 }
 export async function users(db,query={}){
   const args=[],filter=query.keyword?' WHERE (u.username LIKE ? OR u.nickname LIKE ? OR CAST(u.id AS CHAR)=?)':''

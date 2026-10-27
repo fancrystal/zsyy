@@ -1,3 +1,4 @@
+import { incomeText, incomeTitle } from '../../../shared/income.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { rows, one, transaction } from '../db/database.js'
 import { fail, safeNumber, parseJson } from '../errors.js'
@@ -6,7 +7,7 @@ import { getAddress } from './accounts.js'
 export const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
 export const dateView=value=>value?new Date(String(value).replace(' ','T')+'Z').toLocaleString('sv-SE',{timeZone:'Asia/Shanghai'}):null
 export const orderView=o=>({id:String(o.id),orderNo:o.order_no,userId:String(o.user_id),product:parseJson(o.product_snapshot),address:parseJson(o.address_snapshot),quantity:o.quantity,totalUnits:safeNumber(o.total_units),createdAt:dateView(o.created_at)})
-export const ledgerView=l=>({id:String(l.id),type:l.type,title:l.title,note:l.note,amountUnits:safeNumber(l.amount_units),beforeUnits:safeNumber(l.balance_before_units),afterUnits:safeNumber(l.balance_after_units),adminId:l.admin_id===null?null:String(l.admin_id),createdAt:dateView(l.created_at)})
+export const ledgerView=l=>({id:String(l.id),type:l.type,title:incomeTitle(l),note:incomeText(l.note),amountUnits:safeNumber(l.amount_units),beforeUnits:safeNumber(l.balance_before_units),afterUnits:safeNumber(l.balance_after_units),adminId:l.admin_id===null?null:String(l.admin_id),createdAt:dateView(l.created_at)})
 export async function changeBalance(conn,userId,amount,{type,title,note,sourceKey,adminId=null}){
   const wallet=await one(conn,'SELECT balance_units FROM wallets WHERE user_id=? FOR UPDATE',[userId]);if(!wallet)fail(404,'NOT_FOUND','用户钱包不存在')
   const before=BigInt(wallet.balance_units),after=before+BigInt(amount)
@@ -28,7 +29,7 @@ export async function marketSummary(conn,userId){
   const markets=await rows(conn,`SELECT m.direct_child_user_id AS id,m.consumption_units,u.nickname AS name FROM team_market_totals m JOIN users u ON u.id=m.direct_child_user_id WHERE m.owner_user_id=? ORDER BY m.direct_child_user_id`,[userId])
   let total=0n,largest=0n,largestId=null
   for(const m of markets){const n=BigInt(m.consumption_units);total+=n;if(largestId===null||n>largest){largest=n;largestId=String(m.id)}}
-  const account=await one(conn,'SELECT * FROM rebate_accounts WHERE user_id=?',[userId]);if(!account)fail(404,'NOT_FOUND','返利账户不存在')
+  const account=await one(conn,'SELECT * FROM rebate_accounts WHERE user_id=?',[userId]);if(!account)fail(404,'NOT_FOUND','收益账户不存在')
   const entitled=(total-largest)/10n,paid=BigInt(account.paid_units)
   return {markets:markets.map(m=>({id:String(m.id),name:m.name,units:safeNumber(m.consumption_units)})),largestMarketId:largestId,summary:{total:safeNumber(total),largest:safeNumber(largest),eligible:safeNumber(total-largest),entitled:safeNumber(entitled),paid:safeNumber(paid),pending:safeNumber(entitled-paid)},hasAnomaly:!!account.has_anomaly}
 }
@@ -39,7 +40,7 @@ export async function settle(conn,userId,triggerType,triggerRef){
   if(s.pending<0){await rows(conn,'UPDATE rebate_accounts SET has_anomaly=1 WHERE user_id=?',[userId]);await issue(conn,userId,'negative_rebate',s.entitled,s.paid);return 0}
   if(info.hasAnomaly||s.pending===0)return 0
   const result=await rows(conn,'INSERT INTO rebate_records(user_id,trigger_type,trigger_ref,total_units,largest_units,largest_child_id,eligible_units,entitled_units,paid_before_units,granted_units) VALUES(?,?,?,?,?,?,?,?,?,?)',[userId,triggerType,triggerRef,s.total,s.largest,info.largestMarketId,s.eligible,s.entitled,s.paid,s.pending])
-  await changeBalance(conn,userId,s.pending,{type:'team_rebate',title:'团队返利',note:'累计差额发放',sourceKey:`rebate:${result.insertId}`})
+  await changeBalance(conn,userId,s.pending,{type:'team_rebate',title:'团队佣金',note:'累计差额发放',sourceKey:`rebate:${result.insertId}`})
   await rows(conn,'UPDATE rebate_accounts SET paid_units=? WHERE user_id=?',[s.entitled,userId]);return s.pending
 }
 export async function issue(conn,userId,type,expected,actual){
@@ -70,7 +71,7 @@ async function directReferralReward(conn,orderId,buyerId,orderTotalUnits){
   if(!await accountIntegrity(conn,String(buyer.parent_id)))return null
   const rewardUnits=safeNumber(BigInt(orderTotalUnits)*20n/100n)
   const result=await rows(conn,'INSERT INTO direct_referral_rewards(order_id,beneficiary_user_id,buyer_user_id,order_total_units,rate_bps,reward_units) VALUES(?,?,?,?,2000,?)',[orderId,buyer.parent_id,buyerId,orderTotalUnits,rewardUnits])
-  await changeBalance(conn,buyer.parent_id,rewardUnits,{type:'direct_referral_reward',title:'直推收益',note:'直属下线订单 20% 收益',sourceKey:`direct-referral:${result.insertId}`})
+  await changeBalance(conn,buyer.parent_id,rewardUnits,{type:'direct_referral_reward',title:'推荐收益',note:'直属下线订单 20% 收益',sourceKey:`direct-referral:${result.insertId}`})
   return String(result.insertId)
 }
 export async function purchase(db,userId,input,key){const outcome=await transaction(db,async conn=>{

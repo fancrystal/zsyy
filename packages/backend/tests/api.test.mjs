@@ -35,6 +35,27 @@ before(async()=>{
   invite=(await root.get('/api/me')).body.data.inviteCode
 })
 after(async()=>{await db?.end()})
+test('income records aggregate all credited rewards and paginate categories independently',async()=>{
+  const {agent,user}=await register('income-owner')
+  const other=await register('income-other')
+  const entries=[['direct_referral_reward',2000,'直推收益'],['direct_referral_reward',3000,'直推收益'],['team_rebate',8000,'团队返利'],['admin_grant',9000,'后台发放'],['order_spend',-1000,'商品购买']]
+  for(const [type,amount,title] of entries)await db.execute('INSERT INTO wallet_ledger(user_id,type,title,note,amount_units,balance_before_units,balance_after_units,source_key) VALUES(?,?,?,?,?,0,0,?)',[user.id,type,title,'旧返利说明',amount,`income-test:${key()}`])
+  await db.execute('INSERT INTO wallet_ledger(user_id,type,title,note,amount_units,balance_before_units,balance_after_units,source_key) VALUES(?,?,?,?,?,0,0,?)',[other.user.id,'direct_referral_reward','推荐收益','',99999,`income-test:${key()}`])
+  try{
+    assert.equal((await request(app).get('/api/me/income')).status,401)
+    const result=await agent.get('/api/me/income?referralPage=2&pageSize=1')
+    assert.equal(result.status,200)
+    const data=result.body.data
+    assert.deepEqual(data.summary,{referralUnits:5000,teamUnits:8000,totalUnits:13000})
+    assert.equal(data.referral.total,2);assert.equal(data.referral.page,2);assert.equal(data.referral.items.length,1)
+    assert.equal(data.referral.items[0].amountUnits,2000)
+    assert.equal(data.team.page,1);assert.equal(data.team.total,1)
+    assert.equal(data.team.items[0].title,'团队佣金')
+    const ledger=await agent.get('/api/me/wallet/ledger')
+    assert.ok(!JSON.stringify(ledger.body).includes('返利'))
+  }finally{await db.execute('DELETE FROM wallet_ledger WHERE user_id IN (?,?)',[user.id,other.user.id])}
+})
+
 test('health is JSON and user/admin credentials cannot cross authorization boundaries',async()=>{
   const health=await request(app).get('/api/health'); assert.equal(health.status,200); assert.equal(health.body.data.database,'connected')
   assert.equal((await root.get('/api/admin/users')).status,401)

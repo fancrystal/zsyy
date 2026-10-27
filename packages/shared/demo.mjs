@@ -18,7 +18,7 @@ export function createDemoState() {
     orders: [{ id: 'ZS202610220001', key: 'seed-order', product: { id: 'p2', name: '柔润香氛沐浴露', subtitle: '日常洗护 · 500mL', image: '/images/bodywash.png', color: 'cream', priceUnits: 9800 }, quantity: 1, totalUnits: 9800, createdAt: '2026-10-22 09:16:00', address: { recipient: '林女士', phone: '13800138000', detail: '上海市 浦东新区 世纪大道 100 号' } }],
     ledger: [
       { id: 'l3', type: 'order', title: '商品购买', note: '柔润香氛沐浴露 × 1', amountUnits: -9800, createdAt: '2026-10-22 09:16:00' },
-      { id: 'l2', type: 'rebate', title: '团队返利', note: '累计差额发放', amountUnits: 80000, createdAt: '2026-10-22 08:30:00' },
+      { id: 'l2', type: 'rebate', title: '团队收益', note: '累计差额发放', amountUnits: 80000, createdAt: '2026-10-22 08:30:00' },
       { id: 'l1', type: 'grant', title: '后台发放', note: '演示初始产品券', amountUnits: 197800, createdAt: '2026-10-21 10:00:00' }
     ],
     markets: [{ id: '100101', name: '张先生', members: 12, units: 1000000 }, { id: '100102', name: '陈女士', members: 8, units: 600000 }, { id: '100103', name: '王先生', members: 5, units: 200000 }],

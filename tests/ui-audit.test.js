@@ -88,20 +88,30 @@ test('address validation and save button preserve the historical order address',
 test('personal ledger, team, rebate and invitation controls open their actual content', async () => {
   await mountMobile('/me')
   await click('收支明细'); expect(document.querySelector('dialog').textContent).toContain('后台发放'); await click('关闭')
-  await click('查看团队'); expect(document.querySelectorAll('.market-row')).toHaveLength(3); expect(document.querySelector('dialog').textContent).toContain('最大市场'); await click('关闭')
+  await click('查看团队'); expect(document.querySelectorAll('.market-row')).toHaveLength(3); expect(document.querySelector('dialog').textContent).toContain('最大市场'); expect(document.querySelector('dialog').textContent).toContain('直属推荐用户完成订单后，推荐人获得该订单金额的 20%'); expect(document.querySelector('dialog').textContent).toContain('仅限直接推荐关系'); expect(document.querySelector('dialog').textContent).toContain('排除累计消费最高的一个子市场，其余子市场累计消费的 10%'); expect(document.querySelector('dialog').textContent).toContain('扣除已发收益后补发差额'); await click('关闭')
   document.querySelector('.team-summary').click(); await tick(); expect(document.querySelector('dialog h2').textContent).toBe('我的团队'); await click('关闭')
   document.querySelectorAll('.menu-group button')[2].click(); await tick(); expect(document.querySelector('dialog').textContent).toContain('10%'); await click('关闭')
   document.querySelectorAll('.menu-group button')[1].click(); await tick(); expect(document.querySelector('.invite-code').textContent).toBe('ZS8K26'); await click('关闭')
   document.querySelector('.menu-group a').click(); await tick(); expect(router.currentRoute.value.path).toBe('/orders')
 })
-test('personal wallet keeps team rebates separate while showing direct referral reward ledger entries', async () => {
+test('income records total both rewards and show separate referral and team histories', async () => {
   const seed=createDemoState()
   seed.ledger.unshift({id:'direct-referral-1',type:'direct_referral_reward',title:'直推收益',note:'直属下线订单 20% 收益',amountUnits:2000,beforeUnits:268000,afterUnits:270000,createdAt:'2026-10-27 10:00:00'})
   update(seed)
   await mountMobile('/me')
-  expect(document.querySelector('.wallet-bottom').textContent).toContain('累计团队返利')
+  expect(document.querySelector('.wallet-bottom').textContent).toContain('累计总收益')
+  expect(document.querySelector('.wallet-bottom').textContent).toContain('820.00')
+  document.querySelectorAll('.menu-group button')[2].click();await tick()
+  const dialog=document.querySelector('dialog')
+  expect(dialog.querySelector('.stat-highlight').textContent).toContain('820.00')
+  expect(dialog.textContent).toContain('推荐收益（直接推荐20%）')
+  expect(dialog.textContent).toContain('团队佣金（团队收益10%）')
+  expect(dialog.querySelector('[aria-label="推荐收益记录"]').textContent).toContain('20.00')
+  expect(dialog.querySelector('[aria-label="团队佣金记录"]').textContent).toContain('800.00')
+  expect(document.body.textContent).not.toContain('返利')
+  await click('关闭')
   await click('收支明细')
-  expect(document.querySelector('dialog').textContent).toContain('直推收益')
+  expect(document.querySelector('dialog').textContent).toContain('推荐收益')
 })
 test('all eight admin navigation entries open their intended view and overview shortcuts work', async () => {
   await mountAdmin()
@@ -143,7 +153,7 @@ test('reset confirmation cancellation preserves data, confirmation restores the 
   window.confirm.mockReturnValue(true); await click('重置演示'); expect(state.value.balanceUnits).toBe(268000)
 })
 test('rebate and job views describe their scope without pretending to execute settlement', async () => {
-  await mountAdmin(); await click('团队与返利'); expect(document.body.textContent).toContain('800.00'); expect(document.body.textContent).toContain('最大市场 · 排除')
+  await mountAdmin(); await click('团队与收益'); expect(document.body.textContent).toContain('800.00'); expect(document.body.textContent).toContain('最大市场 · 排除')
   await click('结算与对账'); expect(document.body.textContent).toContain('当前没有真实调度器'); expect(button('立即结算')).toBeUndefined()
 })
 test('product opening and voucher grant still work when an HTTP phone browser has no randomUUID', async () => {
@@ -161,7 +171,7 @@ test('largest market badges follow cumulative consumption rather than the first 
   const rows=[...document.querySelectorAll('.market-row')]
   expect(rows.find(row => row.textContent.includes('陈女士')).textContent).toContain('最大市场')
   expect(rows.find(row => row.textContent.includes('张先生')).textContent).not.toContain('最大市场')
-  wrapper.unmount(); wrapper=null; await mountAdmin(); await click('团队与返利')
+  wrapper.unmount(); wrapper=null; await mountAdmin(); await click('团队与收益')
   const adminRows=[...document.querySelectorAll('.el-table__body tr')]
   expect(adminRows.find(row => row.textContent.includes('陈女士')).textContent).toContain('最大市场 · 排除')
 })

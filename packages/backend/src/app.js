@@ -52,6 +52,7 @@ export function createApp(db,options={}){
   app.get('/api/me/wallet/ledger',asyncRoute(async(req,res)=>send(res,await accounting.ledger(db,req.identity,req.query))))
   app.get('/api/me/team',asyncRoute(async(req,res)=>send(res,await queries.teamInfo(db,req.identity))))
   app.get('/api/me/rebates',asyncRoute(async(req,res)=>send(res,await queries.rebates(db,req.query,req.identity))))
+  app.get('/api/me/income',asyncRoute(async(req,res)=>send(res,await queries.incomeRecords(db,req.identity,req.query))))
   app.use('/api/orders',requireRole('user'))
   app.get('/api/orders',asyncRoute(async(req,res)=>send(res,await accounting.listOrders(db,req.query,req.identity))))
   app.get('/api/orders/:id',asyncRoute(async(req,res)=>send(res,await accounting.getOrder(db,pathId(req),req.identity))))
