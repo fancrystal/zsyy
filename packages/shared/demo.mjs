@@ -11,9 +11,8 @@ export function createDemoState() {
     address: { recipient: '林女士', phone: '13800138000', detail: '上海市 浦东新区 世纪大道 100 号' },
     company: { name: '产品券商城', tagline: '把品质，带进日常', intro: '我们相信，美好的生活藏在每一个用心的选择里。从日常洗护到居家用品，以品质为起点，让每一份产品券都遇见值得的好物。', body: '专注产品本身，认真选择日常所需。我们希望通过简洁便捷的产品券商城，让您轻松发现适合自己的生活好物。产品购买后由线下安排交付，您可以随时在订单中查阅购买记录。' },
     products: [
-      { id: 'p1', name: '植萃柔顺洗发露', subtitle: '日常洗护 · 500mL', category: '日常洗护', priceUnits: 12800, image: '/images/shampoo.png', color: 'sage', active: true, description: '为日常洗护准备的植萃系列。简洁瓶身，轻松融入浴室空间。商品信息与图片仅用于界面演示，正式规格以上架资料为准。' },
-      { id: 'p2', name: '柔润香氛沐浴露', subtitle: '日常洗护 · 500mL', category: '日常洗护', priceUnits: 9800, image: '/images/bodywash.png', color: 'cream', active: true, description: '为每日沐浴时光增添一份从容。商品信息与图片仅用于界面演示，正式规格以上架资料为准。' },
-      { id: 'p3', name: '轻盈滋养护发素', subtitle: '日常洗护 · 500mL', category: '日常洗护', priceUnits: 10800, image: '/images/conditioner.png', color: 'rose', active: true, description: '日常护发系列，与洗发产品搭配使用。商品信息与图片仅用于界面演示，正式规格以上架资料为准。' }
+      { id: 'p1', name: '百年华汉纳豆鲜醇压片糖果', subtitle: '30g（0.5g×60片）', category: '', priceUnits: 39900, image: '/images/natto-fresh.png', color: 'rose', active: true, description: '百年华汉纳豆鲜醇压片糖果。详细产品资料请查看商品详情长图，并以包装说明为准。' },
+      { id: 'p2', name: '百年华汉酸清轻压片糖果', subtitle: '30g（0.5g×60片）', category: '', priceUnits: 39900, image: '/images/acid-light.png', color: 'blue', active: true, description: '百年华汉酸清轻压片糖果。详细产品资料请查看商品详情长图，并以包装说明为准。' }
     ],
     orders: [{ id: 'ZS202610220001', key: 'seed-order', product: { id: 'p2', name: '柔润香氛沐浴露', subtitle: '日常洗护 · 500mL', image: '/images/bodywash.png', color: 'cream', priceUnits: 9800 }, quantity: 1, totalUnits: 9800, createdAt: '2026-10-22 09:16:00', address: { recipient: '林女士', phone: '13800138000', detail: '上海市 浦东新区 世纪大道 100 号' } }],
     ledger: [

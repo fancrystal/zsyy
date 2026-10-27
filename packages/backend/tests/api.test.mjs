@@ -238,3 +238,19 @@ test('approved six-person phone test team has fixed parents and is idempotent',a
   ])
   for(const member of members)assert.equal((await request(app).post('/api/auth/login').send({username:member.username,password:'123456'})).status,200)
 })
+test('health catalog sync keeps only two 399 products and does not alter past orders',async()=>{
+  const {syncHealthProducts}=await import('../src/services/catalog-maintenance.js')
+  const beforeOrders=Number((await db.execute('SELECT COUNT(*) AS total FROM orders'))[0][0].total)
+  const first=await syncHealthProducts(db),second=await syncHealthProducts(db)
+  assert.deepEqual(first.map(product=>[product.name,product.priceUnits,product.active]),[
+    ['百年华汉纳豆鲜醇压片糖果',39900,true],
+    ['百年华汉酸清轻压片糖果',39900,true]
+  ])
+  assert.deepEqual(second.map(product=>product.id),first.map(product=>product.id))
+  const [active]=await db.execute('SELECT name,price_units,category,image FROM products WHERE is_active=1 ORDER BY name')
+  assert.deepEqual(active.map(product=>[product.name,Number(product.price_units),product.category,product.image]),[
+    ['百年华汉纳豆鲜醇压片糖果',39900,'','/images/natto-fresh.png'],
+    ['百年华汉酸清轻压片糖果',39900,'','/images/acid-light.png']
+  ])
+  assert.equal(Number((await db.execute('SELECT COUNT(*) AS total FROM orders'))[0][0].total),beforeOrders)
+})

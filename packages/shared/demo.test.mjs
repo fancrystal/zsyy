@@ -2,18 +2,18 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDemoState, placeDemoOrder, grantDemoVoucher, saveDemoAddress, rebateSummary } from './demo.mjs'
 
-const request = { productId: 'p1', quantity: 2, expectedPriceUnits: 12800, key: 'purchase-1' }
+const request = { productId: 'p1', quantity: 2, expectedPriceUnits: 39900, key: 'purchase-1' }
 
 test('a purchase deducts its exact cost and preserves address and product snapshots', () => {
   const state = createDemoState()
   const next = placeDemoOrder(state, request)
-  assert.equal(next.balanceUnits, state.balanceUnits - 25600)
+  assert.equal(next.balanceUnits, state.balanceUnits - 79800)
   assert.equal(next.orders.length, state.orders.length + 1)
   state.address.recipient = '修改后的名字'
   state.products[0].name = '修改后的商品'
   assert.equal(next.orders[0].address.recipient, '林女士')
-  assert.equal(next.orders[0].product.name, '植萃柔顺洗发露')
-  assert.equal(next.ledger[0].amountUnits, -25600)
+  assert.equal(next.orders[0].product.name, '百年华汉纳豆鲜醇压片糖果')
+  assert.equal(next.ledger[0].amountUnits, -79800)
 })
 test('retries with the same key do not charge twice, different contents are rejected', () => {
   const once = placeDemoOrder(createDemoState(), request)

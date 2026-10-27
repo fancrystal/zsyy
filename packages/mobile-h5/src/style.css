@@ -7,3 +7,4 @@
 .invite-code{font-size:clamp(18px,6vw,30px);letter-spacing:3px;overflow-wrap:anywhere}.brand{min-width:0;max-width:calc(100% - 65px)}.brand-mark{flex-shrink:0}.brand>span:last-child,.profile-header>div{min-width:0;overflow-wrap:anywhere}.profile-header h1{flex-wrap:wrap;overflow-wrap:anywhere}.product-body h2,.market-row strong{overflow-wrap:anywhere}.address-preview>div{min-width:0;overflow-wrap:anywhere}
 
 .income-section{margin-top:22px}.income-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px}.income-heading h3{font-size:13px}.income-heading>strong{font-size:16px;color:#1e3a8a}.income-section>.muted{font-size:12px;padding:14px 0}
+.product-detail-image{display:block;width:100%;height:auto;margin-top:22px;border-radius:10px}

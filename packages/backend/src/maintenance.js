@@ -4,12 +4,14 @@ import { validateConfig } from './config.js'
 import { reconcile } from './services/reconcile.js'
 import { changeBalance,marketSummary } from './services/accounting.js'
 import { auditAccount,marketSource,rebuildMarkets } from './services/audit.js'
+import { syncHealthProducts } from './services/catalog-maintenance.js'
 validateConfig()
 const [command,...args]=process.argv.slice(2),params={}
 for(let i=0;i<args.length;i+=2){if(!args[i].startsWith('--')||args[i+1]===undefined)throw new Error('Arguments must use --name value pairs');params[args[i].slice(2)]=args[i+1]}
 const db=createDatabase()
 try{
   if(command==='reconcile')console.log(JSON.stringify(await reconcile(db,`maintenance:${params.key||randomUUID()}`)))
+  else if(command==='sync-health-products')console.log(JSON.stringify(await syncHealthProducts(db)))
   else if(command==='adjust'){
     if(!/^\d+$/.test(params.user||'')||!/^[-+]?\d+$/.test(params.units||'')||!params.note?.trim()||!params.key||params.key.length>80)throw new Error('adjust requires --user ID --units signed-minor-units --note reason --key unique-key')
     const units=BigInt(params.units);if(units===0n||units>1000000000000n||units< -1000000000000n)throw new Error('Invalid adjustment amount')
@@ -32,5 +34,5 @@ try{
       await rows(conn,"UPDATE reconciliation_issues SET status='resolved' WHERE user_id=? AND status='open'",[params.user])
       await rows(conn,'INSERT INTO audit_logs(action,target_id,summary) VALUES(?,?,?)',['maintenance.resolve',params.user,params.note]);return {resolved:true}
     });console.log(JSON.stringify(result))
-  }else throw new Error('Usage: maintenance.js reconcile | adjust | resolve; see docs/10-fullstack-guide.md')
+  }else throw new Error('Usage: maintenance.js reconcile | adjust | resolve | sync-health-products; see docs/10-fullstack-guide.md')
 }catch(error){console.error(error.message);process.exitCode=1}finally{await db.end()}
