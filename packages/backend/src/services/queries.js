@@ -3,6 +3,8 @@ import { safeNumber } from '../errors.js'
 import { publicUser, me, getAddress } from './accounts.js'
 import { paginate } from './catalog.js'
 import { marketSummary, dateView, wallet, ledgerView } from './accounting.js'
+import { transferView } from './accounting.js'
+import { pagination } from './catalog.js'
 export async function incomeSummary(db,userId){
   const sums=await one(db,"SELECT COALESCE(SUM(CASE WHEN type='direct_referral_reward' THEN amount_units ELSE 0 END),0) AS referral,COALESCE(SUM(CASE WHEN type='team_rebate' THEN amount_units ELSE 0 END),0) AS team FROM wallet_ledger WHERE user_id=? AND type IN ('direct_referral_reward','team_rebate')",[userId])
   return {referralUnits:safeNumber(sums.referral),teamUnits:safeNumber(sums.team),totalUnits:safeNumber(BigInt(sums.referral)+BigInt(sums.team))}
@@ -11,6 +13,12 @@ export async function incomeRecords(db,userId,query={}){
   const category=(type,page)=>paginate(db,'SELECT * FROM wallet_ledger WHERE user_id=? AND type=? ORDER BY id DESC','SELECT COUNT(*) AS total FROM wallet_ledger WHERE user_id=? AND type=?',[userId,type],{page,pageSize:query.pageSize},ledgerView)
   const [summary,referral,team]=await Promise.all([incomeSummary(db,userId),category('direct_referral_reward',query.referralPage),category('team_rebate',query.teamPage)])
   return {summary,referral,team}
+}
+export async function transfers(db,userId,query={}){
+  const {page,pageSize,offset}=pagination(query)
+  const total=safeNumber((await one(db,'SELECT COUNT(*) AS total FROM voucher_transfers WHERE sender_user_id=? OR recipient_user_id=?',[userId,userId])).total)
+  const data=await rows(db,`SELECT t.*,CASE WHEN t.sender_user_id=? THEN 'out' ELSE 'in' END AS direction,CASE WHEN t.sender_user_id=? THEN r.id ELSE s.id END AS counterparty_id,CASE WHEN t.sender_user_id=? THEN r.username ELSE s.username END AS counterparty_phone,CASE WHEN t.sender_user_id=? THEN r.nickname ELSE s.nickname END AS counterparty_nickname FROM voucher_transfers t JOIN users s ON s.id=t.sender_user_id JOIN users r ON r.id=t.recipient_user_id WHERE t.sender_user_id=? OR t.recipient_user_id=? ORDER BY t.id DESC LIMIT ${pageSize} OFFSET ${offset}`,[userId,userId,userId,userId,userId,userId])
+  return {items:data.map(transferView),page,pageSize,total}
 }
 export async function teamInfo(db,id){
   const info=await marketSummary(db,id),users=await rows(db,'SELECT id,parent_id FROM users')

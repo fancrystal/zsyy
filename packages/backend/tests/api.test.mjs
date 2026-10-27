@@ -155,6 +155,30 @@ test('direct parent receives one immediate 20 percent reward per successful chil
   const [[rootRewards]]=await db.execute('SELECT COUNT(*) AS total FROM direct_referral_rewards WHERE buyer_user_id=1')
   assert.equal(Number(rootRewards.total),0)
 })
+test('voucher transfer moves product vouchers once without creating consumption or rewards',async()=>{
+  const sender=await register('transfer-sender'),recipient=await register('transfer-recipient'),outsider=await register('transfer-outsider')
+  await grant(sender.user.id,20010)
+  const transferKey=key(),payload={recipientPhone:recipient.user.username,amountUnits:10005,note:'transfer integration test'}
+  const beforeOrders=(await db.execute('SELECT COUNT(*) AS total FROM orders'))[0][0].total
+  const beforeRewards=(await db.execute('SELECT COUNT(*) AS total FROM rebate_records'))[0][0].total
+  const first=await sender.agent.post('/api/transfers').set('Idempotency-Key',transferKey).send(payload)
+  assert.equal(first.status,201,JSON.stringify(first.body))
+  const replay=await sender.agent.post('/api/transfers').set('Idempotency-Key',transferKey).send(payload)
+  assert.equal(replay.status,200);assert.equal(replay.body.data.replayed,true)
+  assert.equal((await sender.agent.get('/api/me/wallet')).body.data.balanceUnits,10005)
+  assert.equal((await recipient.agent.get('/api/me/wallet')).body.data.balanceUnits,10005)
+  const senderTransfers=(await sender.agent.get('/api/transfers')).body.data,recipientTransfers=(await recipient.agent.get('/api/transfers')).body.data,outsiderTransfers=(await outsider.agent.get('/api/transfers')).body.data
+  assert.equal(senderTransfers.total,1);assert.equal(senderTransfers.items[0].direction,'out');assert.equal(senderTransfers.items[0].counterparty.phone,recipient.user.username)
+  assert.equal(recipientTransfers.total,1);assert.equal(recipientTransfers.items[0].direction,'in');assert.equal(recipientTransfers.items[0].counterparty.phone,sender.user.username)
+  assert.equal(outsiderTransfers.total,0)
+  const [ledger]=await db.execute("SELECT type,amount_units FROM wallet_ledger WHERE source_key LIKE 'transfer:%' ORDER BY id")
+  assert.deepEqual(ledger.map(row=>[row.type,Number(row.amount_units)]),[['transfer_out',-10005],['transfer_in',10005]])
+  assert.equal((await db.execute('SELECT COUNT(*) AS total FROM orders'))[0][0].total,beforeOrders)
+  assert.equal((await db.execute('SELECT COUNT(*) AS total FROM rebate_records'))[0][0].total,beforeRewards)
+  assert.equal((await sender.agent.post('/api/transfers').set('Idempotency-Key',key()).send({...payload,amountUnits:10006})).status,409)
+  assert.equal((await sender.agent.post('/api/transfers').set('Idempotency-Key',key()).send({...payload,recipientPhone:sender.user.username,amountUnits:1})).status,409)
+  assert.equal((await sender.agent.post('/api/transfers').set('Idempotency-Key',key()).send({...payload,recipientPhone:'13123456789',amountUnits:1})).status,404)
+})
 test('product and user filters, company images and actual task records are available to admin',async()=>{
   const users=await admin.get('/api/admin/users?keyword=team-parent&pageSize=2'); assert.equal(users.body.data.total,1)
   const id=users.body.data.items[0].id; assert.equal((await admin.get(`/api/admin/users/${id}`)).status,200)

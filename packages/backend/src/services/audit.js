@@ -1,7 +1,7 @@
 import { rows,one } from '../db/database.js'
 import { issue,ancestors } from './accounting.js'
 export async function auditAccount(conn,userId){
-  const ledger=await rows(conn,'SELECT * FROM wallet_ledger WHERE user_id=? ORDER BY id',[userId]),orders=await rows(conn,'SELECT id,user_id,total_units FROM orders WHERE user_id=?',[userId]),grants=await rows(conn,'SELECT id,user_id,amount_units FROM voucher_grants WHERE user_id=?',[userId]),rebates=await rows(conn,'SELECT id,user_id,granted_units FROM rebate_records WHERE user_id=?',[userId]),directRewards=await rows(conn,'SELECT r.*,o.user_id AS order_buyer_id,o.total_units AS order_total_units_actual,b.parent_id AS buyer_parent_id FROM direct_referral_rewards r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=r.buyer_user_id WHERE r.beneficiary_user_id=?',[userId])
+  const ledger=await rows(conn,'SELECT * FROM wallet_ledger WHERE user_id=? ORDER BY id',[userId]),orders=await rows(conn,'SELECT id,user_id,total_units FROM orders WHERE user_id=?',[userId]),grants=await rows(conn,'SELECT id,user_id,amount_units FROM voucher_grants WHERE user_id=?',[userId]),rebates=await rows(conn,'SELECT id,user_id,granted_units FROM rebate_records WHERE user_id=?',[userId]),transfers=await rows(conn,`SELECT t.*,out_ledger.user_id AS out_user_id,out_ledger.amount_units AS out_amount,in_ledger.user_id AS in_user_id,in_ledger.amount_units AS in_amount FROM voucher_transfers t LEFT JOIN wallet_ledger out_ledger ON out_ledger.source_key=CONCAT('transfer:',t.id,':out') LEFT JOIN wallet_ledger in_ledger ON in_ledger.source_key=CONCAT('transfer:',t.id,':in') WHERE t.sender_user_id=? OR t.recipient_user_id=?`,[userId,userId]),directRewards=await rows(conn,'SELECT r.*,o.user_id AS order_buyer_id,o.total_units AS order_total_units_actual,b.parent_id AS buyer_parent_id FROM direct_referral_rewards r JOIN orders o ON o.id=r.order_id JOIN users b ON b.id=r.buyer_user_id WHERE r.beneficiary_user_id=?',[userId])
   let bad=false,balance=0n;const sources=new Map()
   const record=async(type,expected,actual)=>{bad=true;await issue(conn,userId,type,expected,actual)}
   for(const entry of ledger){const after=balance+BigInt(entry.amount_units);if(balance!==BigInt(entry.balance_before_units)||after!==BigInt(entry.balance_after_units))await record('ledger_chain',after,entry.balance_after_units);balance=after}
@@ -12,6 +12,11 @@ export async function auditAccount(conn,userId){
     const expected=BigInt(reward.order_total_units)*BigInt(reward.rate_bps)/10000n
     if(String(reward.order_buyer_id)!==String(reward.buyer_user_id)||BigInt(reward.order_total_units_actual)!==BigInt(reward.order_total_units)||String(reward.buyer_parent_id)!==String(reward.beneficiary_user_id)||Number(reward.rate_bps)!==2000||BigInt(reward.reward_units)!==expected)await record('direct_referral_source','matching order and direct parent',String(reward.id))
     sources.set(`direct-referral:${reward.id}`,{amount:BigInt(reward.reward_units),type:'direct_referral_reward'})
+  }
+  for(const transfer of transfers){
+    if(String(transfer.sender_user_id)===String(transfer.recipient_user_id)||BigInt(transfer.amount_units)<=0n||String(transfer.out_user_id)!==String(transfer.sender_user_id)||String(transfer.in_user_id)!==String(transfer.recipient_user_id)||BigInt(transfer.out_amount)!==-BigInt(transfer.amount_units)||BigInt(transfer.in_amount)!==BigInt(transfer.amount_units))await record('transfer_source','matching two-sided transfer',String(transfer.id))
+    if(String(transfer.sender_user_id)===String(userId))sources.set(`transfer:${transfer.id}:out`,{amount:-BigInt(transfer.amount_units),type:'transfer_out'})
+    if(String(transfer.recipient_user_id)===String(userId))sources.set(`transfer:${transfer.id}:in`,{amount:BigInt(transfer.amount_units),type:'transfer_in'})
   }
   const found=new Set()
   for(const entry of ledger){const source=sources.get(entry.source_key)

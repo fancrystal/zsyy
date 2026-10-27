@@ -8,6 +8,7 @@ export const hash=value=>createHash('sha256').update(JSON.stringify(value)).dige
 export const dateView=value=>value?new Date(String(value).replace(' ','T')+'Z').toLocaleString('sv-SE',{timeZone:'Asia/Shanghai'}):null
 export const orderView=o=>({id:String(o.id),orderNo:o.order_no,userId:String(o.user_id),product:parseJson(o.product_snapshot),address:parseJson(o.address_snapshot),quantity:o.quantity,totalUnits:safeNumber(o.total_units),createdAt:dateView(o.created_at)})
 export const ledgerView=l=>({id:String(l.id),type:l.type,title:incomeTitle(l),note:incomeText(l.note),amountUnits:safeNumber(l.amount_units),beforeUnits:safeNumber(l.balance_before_units),afterUnits:safeNumber(l.balance_after_units),adminId:l.admin_id===null?null:String(l.admin_id),createdAt:dateView(l.created_at)})
+export const transferView=t=>({id:String(t.id),transferNo:t.transfer_no,direction:t.direction,amountUnits:safeNumber(t.amount_units),note:t.note,counterparty:{id:String(t.counterparty_id),phone:t.counterparty_phone,nickname:t.counterparty_nickname},createdAt:dateView(t.created_at)})
 export async function changeBalance(conn,userId,amount,{type,title,note,sourceKey,adminId=null}){
   const wallet=await one(conn,'SELECT balance_units FROM wallets WHERE user_id=? FOR UPDATE',[userId]);if(!wallet)fail(404,'NOT_FOUND','用户钱包不存在')
   const before=BigInt(wallet.balance_units),after=before+BigInt(amount)
@@ -95,6 +96,19 @@ export async function purchase(db,userId,input,key){const outcome=await transact
   if(outcome.blocked)fail(409,'ACCOUNT_UNDER_REVIEW','账户存在账务异常，请联系管理员核对')
   return outcome
 }
+export async function transfer(db,senderId,input,key){return transaction(db,async conn=>{
+  const fingerprint=hash([input.recipientPhone,input.amountUnits,input.note]),existing=await one(conn,'SELECT * FROM voucher_transfers WHERE sender_user_id=? AND idempotency_key=?',[senderId,key])
+  if(existing){if(existing.request_hash!==fingerprint)fail(409,'IDEMPOTENCY_CONFLICT','相同请求编号的内容不一致');return {id:String(existing.id),replayed:true}}
+  const recipient=await one(conn,'SELECT id FROM users WHERE username=? FOR UPDATE',[input.recipientPhone])
+  if(!recipient)fail(404,'RECIPIENT_NOT_FOUND','未找到该手机号对应的用户')
+  if(String(recipient.id)===String(senderId))fail(409,'TRANSFER_SELF','不能向自己转账')
+  if(!await accountIntegrity(conn,senderId)||!await accountIntegrity(conn,String(recipient.id)))fail(409,'ACCOUNT_UNDER_REVIEW','账户存在账务异常，请联系管理员核对')
+  const result=await rows(conn,'INSERT INTO voucher_transfers(transfer_no,sender_user_id,recipient_user_id,amount_units,note,idempotency_key,request_hash) VALUES(?,?,?,?,?,?,?)',[`ZT${Date.now()}${randomUUID().slice(0,8)}`,senderId,recipient.id,input.amountUnits,input.note,key,fingerprint])
+  const id=String(result.insertId),note=input.note||'产品券转账'
+  const balanceUnits=await changeBalance(conn,senderId,-input.amountUnits,{type:'transfer_out',title:'转出产品券',note,sourceKey:`transfer:${id}:out`})
+  await changeBalance(conn,recipient.id,input.amountUnits,{type:'transfer_in',title:'转入产品券',note,sourceKey:`transfer:${id}:in`})
+  return {id,balanceUnits,replayed:false}
+})}
 export async function wallet(db,id){const w=await one(db,'SELECT balance_units FROM wallets WHERE user_id=?',[id]);if(!w)fail(404,'NOT_FOUND','钱包不存在');return {balanceUnits:safeNumber(w.balance_units)}}
 export async function ledger(db,id,query={}){const filter=query.type==='admin_grant'?' AND type=\'admin_grant\'':'';return paginate(db,`SELECT * FROM wallet_ledger WHERE user_id=?${filter} ORDER BY id DESC`,`SELECT COUNT(*) AS total FROM wallet_ledger WHERE user_id=?${filter}`,[id],query,ledgerView)}
 export async function listOrders(db,query={},userId=null){

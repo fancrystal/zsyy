@@ -4,7 +4,7 @@ import { api, queryString } from './api.js'
 export const isDemo=new URLSearchParams(window.location.search).get('preview')==='1'
 const emptySummary=()=>({total:0,largest:0,eligible:0,entitled:0,paid:0,pending:0})
 const emptyIncome=()=>({summary:{referralUnits:0,teamUnits:0,totalUnits:0},referral:{items:[],page:1,total:0},team:{items:[],page:1,total:0}})
-const live=ref({company:{name:'产品券商城',tagline:'把品质，带进日常',intro:'',body:'',images:[]},profile:null,balanceUnits:0,address:null,products:[],categories:[],orders:[],ledger:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,productPage:{page:1,total:0,pageSize:20},orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})
+const live=ref({company:{name:'产品券商城',tagline:'把品质，带进日常',intro:'',body:'',images:[]},profile:null,balanceUnits:0,address:null,products:[],categories:[],orders:[],ledger:[],transfers:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,productPage:{page:1,total:0,pageSize:20},orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},transferPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})
 export const state=isDemo?demo.state:live
 live.value.income=emptyIncome()
 export const income=computed(()=>{
@@ -20,10 +20,11 @@ export const editProduct=demo.editProduct
 export const saveCompany=demo.saveCompany
 export const grant=demo.grant
 let productSequence=0,orderSequence=0,sessionVersion=0
-function clearPersonal(){sessionVersion++;state.value.income=emptyIncome();Object.assign(state.value,{profile:null,balanceUnits:0,address:null,orders:[],ledger:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})}
+function clearPersonal(){sessionVersion++;state.value.income=emptyIncome();Object.assign(state.value,{profile:null,balanceUnits:0,address:null,orders:[],ledger:[],transfers:[],markets:[],rebates:[],paidRebateUnits:0,summary:emptySummary(),largestMarketId:null,orderTotalUnits:0,orderPage:{page:1,total:0,pageSize:20},ledgerPage:{page:1,total:0,pageSize:20},transferPage:{page:1,total:0,pageSize:20},rebatePage:{page:1,total:0,pageSize:20}})}
 export async function loadProducts(params={},append=false){if(isDemo)return;const seq=++productSequence,data=await api(`/products${queryString(params)}`);if(seq!==productSequence)return;state.value.products=append?[...state.value.products,...data.items]:data.items;state.value.productPage=data}
 export async function loadOrders(params={},append=false){if(isDemo)return;const seq=++orderSequence,version=sessionVersion,data=await api(`/orders${queryString(params)}`);if(seq!==orderSequence||version!==sessionVersion)return;state.value.orders=append?[...state.value.orders,...data.items]:data.items;state.value.orderPage=data;state.value.orderTotalUnits=data.totalSpentUnits}
 export async function loadLedger(page=1){if(isDemo)return;const version=sessionVersion,data=await api(`/me/wallet/ledger?page=${page}`);if(version!==sessionVersion)return;state.value.ledger=page===1?data.items:[...state.value.ledger,...data.items];state.value.ledgerPage=data}
+export async function loadTransfers(page=1){if(isDemo)return;const version=sessionVersion,data=await api(`/transfers?page=${page}`);if(version!==sessionVersion)return;state.value.transfers=page===1?data.items:[...state.value.transfers,...data.items];state.value.transferPage=data}
 export async function loadRebates(page=1){if(isDemo)return;const version=sessionVersion,data=await api(`/me/rebates?page=${page}`);if(version!==sessionVersion)return;state.value.rebates=page===1?data.items:[...state.value.rebates,...data.items];state.value.rebatePage=data;state.value.summary=data.summary;state.value.paidRebateUnits=data.summary.paid}
 let incomeSequence=0
 export async function loadIncome(category){
@@ -61,4 +62,13 @@ export async function purchase(request){
   if(data.balanceUnits!==undefined)state.value.balanceUnits=data.balanceUnits
   refreshSession().catch(()=>{})
   return data.order
+}
+export async function transfer(request){
+  if(isDemo)throw new Error('预览模式不支持产品券转账')
+  const version=sessionVersion
+  const data=await api('/transfers',{method:'POST',key:request.key,body:{recipientPhone:request.recipientPhone,amountUnits:request.amountUnits,note:request.note}})
+  if(version!==sessionVersion)return data
+  if(data.balanceUnits!==undefined)state.value.balanceUnits=data.balanceUnits
+  await Promise.all([loadTransfers(),loadLedger(),refreshSession()])
+  return data
 }
