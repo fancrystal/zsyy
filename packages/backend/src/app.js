@@ -12,7 +12,7 @@ import * as accounting from './services/accounting.js'
 import * as queries from './services/queries.js'
 import { reconcile } from './services/reconcile.js'
 import multer from 'multer'
-import { uploadProductImage, uploadedImageUrl } from './services/product-images.js'
+import { uploadProductImage, uploadedImageUrl, publishUploadedImage } from './services/product-images.js'
 const id=z.string().regex(/^\d+$/).max(20),text=(max)=>z.string().trim().min(1).max(max)
 const money=z.number().int().positive().max(1000000000000)
 const image=z.string().max(1000).refine(s=>/^\/images\/[a-zA-Z0-9_./-]+$/.test(s)||/^https?:\/\/[^\s]+$/i.test(s),'图片地址必须为 http/https URL 或 /images/ 路径')
@@ -68,7 +68,7 @@ export function createApp(db,options={}){
   app.get('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.getCompany(db))))
   app.put('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.saveCompany(db,body(req,z.object({name:text(40),tagline:text(60),intro:text(2000),body:z.string().max(10000),images:z.array(image).max(10).default([])}).strict()),req.identity))))
   app.get('/api/admin/products',asyncRoute(async(req,res)=>send(res,await catalog.listProducts(db,req.query,true))))
-  app.post('/api/admin/product-images',uploadProductImage,asyncRoute(async(req,res)=>{if(!req.file)fail(400,'IMAGE_REQUIRED','请选择图片文件');send(res,{url:uploadedImageUrl(req.file)},201)}))
+  app.post('/api/admin/product-images',uploadProductImage,asyncRoute(async(req,res)=>{if(!req.file)fail(400,'IMAGE_REQUIRED','请选择图片文件');await publishUploadedImage(req.file);send(res,{url:uploadedImageUrl(req.file)},201)}))
   app.post('/api/admin/products',asyncRoute(async(req,res)=>send(res,await catalog.saveProduct(db,null,body(req,productSchema),req.identity),201)))
   app.patch('/api/admin/products/:id',asyncRoute(async(req,res)=>{const old=await catalog.getProduct(db,pathId(req),true),patch=body(req,productSchema.partial());const {id:ignoredId,color:ignoredColor,...base}=old;send(res,await catalog.saveProduct(db,pathId(req),productSchema.parse({...base,...patch}),req.identity))}))
   app.get('/api/admin/users',asyncRoute(async(req,res)=>send(res,await queries.users(db,req.query))))

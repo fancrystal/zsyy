@@ -1,5 +1,7 @@
 import test, { before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { stat } from 'node:fs/promises'
+import path from 'node:path'
 import request from 'supertest'
 import { createApp } from '../src/app.js'
 import { createDatabase } from '../src/db/database.js'
@@ -199,9 +201,14 @@ test('product detail images and sorting are saved for admin and public catalog v
   assert.equal((await admin.post('/api/admin/products').send({name:'非法详情图',image:'/images/shampoo.png',priceUnits:1,detailImages:['invalid-url'],sortOrder:-1,active:true})).status,400)
 })
 test('product image upload stores an allowed image at a stable path',async()=>{
-  const uploaded=await admin.post('/api/admin/product-images').attach('image',Buffer.from('fake-png'),{filename:'cover.png',contentType:'image/png'})
+  const previousUmask=process.umask(0o027)
+  let uploaded
+  try{uploaded=await admin.post('/api/admin/product-images').attach('image',Buffer.from('fake-png'),{filename:'cover.png',contentType:'image/png'})}finally{process.umask(previousUmask)}
   assert.equal(uploaded.status,201,JSON.stringify(uploaded.body))
   assert.match(uploaded.body.data.url,/^\/images\/uploads\/[a-f0-9-]+\.png$/)
+  const mode=(await stat(path.join(config.productImageDir,path.basename(uploaded.body.data.url)))).mode&0o777
+  if(process.platform==='win32')assert.ok(mode&0o004)
+  else assert.equal(mode,0o644)
   assert.equal((await request(app).get(uploaded.body.data.url)).status,200)
   assert.equal((await admin.post('/api/admin/product-images').attach('image',Buffer.from('not-an-image'),{filename:'bad.txt',contentType:'text/plain'})).status,400)
   assert.equal((await request(app).post('/api/admin/product-images').attach('image',Buffer.from('fake-png'),{filename:'cover.png',contentType:'image/png'})).status,401)

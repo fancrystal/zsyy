@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs'
+import { chmod } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import multer from 'multer'
@@ -16,3 +17,4 @@ export const uploadProductImage=multer({
   fileFilter:(req,file,done)=>done(types.has(file.mimetype)?null:new BusinessError(400,'INVALID_IMAGE','仅支持 PNG、JPEG、WebP、GIF 图片'),types.has(file.mimetype))
 }).single('image')
 export const uploadedImageUrl=file=>`/images/uploads/${file.filename}`
+export async function publishUploadedImage(file){await chmod(file.path,0o644)}
