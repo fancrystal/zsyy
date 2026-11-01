@@ -25,6 +25,8 @@ fi
 
 install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$APP_ROOT" "$APP_ROOT/releases"
 install -d -o root -g root -m 0755 "$PUBLIC_ROOT" "$PUBLIC_ROOT/releases"
+install -d -o root -g root -m 0755 /var/lib/zsyy
+install -d -o "$APP_USER" -g root -m 0755 /var/lib/zsyy/product-images
 install -d -o root -g "$APP_GROUP" -m 0750 "$ENV_DIR"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -38,6 +40,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   {
     printf 'NODE_ENV=production\n'
     printf 'PORT=3020\n'
+    printf 'PRODUCT_IMAGE_DIR=/var/lib/zsyy/product-images\n'
     printf 'DB_HOST=127.0.0.1\n'
     printf 'DB_PORT=3306\n'
     printf 'DB_NAME=%s\n' "$DATABASE_NAME"

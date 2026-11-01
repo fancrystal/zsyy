@@ -53,6 +53,13 @@ test('mall offers two 399 supplement products without category navigation and sh
   await fill('[aria-label="搜索商品"]', '不存在'); expect(document.querySelectorAll('.product-card')).toHaveLength(0)
   await click('查看全部商品'); expect(document.querySelectorAll('.product-card')).toHaveLength(2)
 })
+test('mall product detail displays every backend-managed detail image in order', async () => {
+  const seed=createDemoState()
+  seed.products[0].detailImages=['/images/natto-fresh-long.jpg','/images/acid-light-long.jpg']
+  update(seed)
+  await mountMobile('/mall');await openFirstProduct()
+  expect([...document.querySelectorAll('[data-product-detail-image]')].map(image=>image.getAttribute('src'))).toEqual(['/images/natto-fresh-long.jpg','/images/acid-light-long.jpg'])
+})
 test('quantity controls and purchase create one correctly priced order and debit entry', async () => {
   await mountMobile('/mall'); await openFirstProduct()
   expect(document.querySelector('[aria-label="减少数量"]').disabled).toBe(true)

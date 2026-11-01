@@ -8,3 +8,4 @@ dist/
 *.log
 artifacts/
 .release/
+packages/mobile-h5/public/images/uploads/

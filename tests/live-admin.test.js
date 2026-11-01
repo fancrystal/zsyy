@@ -20,8 +20,10 @@ test('administrator signs in, creates a real product through API, and can sign o
   await wrapper.get('input[autocomplete="username"]').setValue('admin');await wrapper.get('input[type="password"]').setValue('valid-password-2026');await wrapper.get('form').trigger('submit');await flushPromises()
   expect(document.querySelector('nav[aria-label="后台菜单"]')).not.toBeNull()
   await click('商品管理');await click('新增商品')
+  expect(document.querySelector('input[name="sortOrder"]')).not.toBeNull()
+  expect(document.querySelector('dialog').textContent).toContain('详情图片')
   for(const [name,value] of [['name','新建测试商品'],['price','12.50'],['image','/images/shampoo.png']]){const input=document.querySelector(`dialog input[name="${name}"]`);expect(input).not.toBeNull();input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}))}
   document.querySelector('dialog form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await flushPromises()
-  expect(document.body.textContent).toContain('新建测试商品');expect(document.querySelector('dialog')).toBeNull();expect(products[0].priceUnits).toBe(1250)
+  expect(document.body.textContent).toContain('新建测试商品');expect(document.querySelector('dialog')).toBeNull();expect(products[0].priceUnits).toBe(1250);expect(products[0].sortOrder).toBe(0);expect(products[0].detailImages).toEqual([])
   await click('退出登录');expect(document.querySelector('input[type="password"]')).not.toBeNull()
 })

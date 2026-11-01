@@ -11,14 +11,16 @@ import * as catalog from './services/catalog.js'
 import * as accounting from './services/accounting.js'
 import * as queries from './services/queries.js'
 import { reconcile } from './services/reconcile.js'
+import multer from 'multer'
+import { uploadProductImage, uploadedImageUrl } from './services/product-images.js'
 const id=z.string().regex(/^\d+$/).max(20),text=(max)=>z.string().trim().min(1).max(max)
 const money=z.number().int().positive().max(1000000000000)
 const image=z.string().max(1000).refine(s=>/^\/images\/[a-zA-Z0-9_./-]+$/.test(s)||/^https?:\/\/[^\s]+$/i.test(s),'图片地址必须为 http/https URL 或 /images/ 路径')
-const productSchema=z.object({name:text(100),subtitle:z.string().trim().max(100).default(''),category:z.string().trim().max(60).default(''),description:z.string().max(5000).default(''),image,priceUnits:money,active:z.boolean().default(true)}).strict()
+const productSchema=z.object({name:text(100),subtitle:z.string().trim().max(100).default(''),category:z.string().trim().max(60).default(''),description:z.string().max(5000).default(''),image,detailImages:z.array(image).max(30).default([]),priceUnits:money,sortOrder:z.number().int().min(0).max(2147483647).default(0),active:z.boolean().default(true)}).strict()
 const asyncRoute=fn=>(req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next)
 export function createApp(db,options={}){
   const app=express(),secrets={user:options.userSecret||config.userSecret,admin:options.adminSecret||config.adminSecret}
-  app.disable('x-powered-by');app.set('trust proxy','loopback');app.use(express.json({limit:'128kb'}));app.use(cookieParser())
+  app.disable('x-powered-by');app.set('trust proxy','loopback');app.use(express.json({limit:'128kb'}));app.use(cookieParser());app.use('/images/uploads',express.static(config.productImageDir,{fallthrough:false,maxAge:'1y',immutable:true}))
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');if(['POST','PUT','PATCH','DELETE'].includes(req.method)&&req.headers.origin&&req.headers.origin!==`${req.protocol}://${req.get('host')}`)return next(Object.assign(new Error('请求来源无效'),{status:403,code:'INVALID_ORIGIN'}));next()})
   const body=(req,schema)=>schema.parse(req.body),pathId=req=>id.parse(req.params.id)
   const key=req=>text(80).parse(req.get('Idempotency-Key'))
@@ -66,6 +68,7 @@ export function createApp(db,options={}){
   app.get('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.getCompany(db))))
   app.put('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.saveCompany(db,body(req,z.object({name:text(40),tagline:text(60),intro:text(2000),body:z.string().max(10000),images:z.array(image).max(10).default([])}).strict()),req.identity))))
   app.get('/api/admin/products',asyncRoute(async(req,res)=>send(res,await catalog.listProducts(db,req.query,true))))
+  app.post('/api/admin/product-images',uploadProductImage,asyncRoute(async(req,res)=>{if(!req.file)fail(400,'IMAGE_REQUIRED','请选择图片文件');send(res,{url:uploadedImageUrl(req.file)},201)}))
   app.post('/api/admin/products',asyncRoute(async(req,res)=>send(res,await catalog.saveProduct(db,null,body(req,productSchema),req.identity),201)))
   app.patch('/api/admin/products/:id',asyncRoute(async(req,res)=>{const old=await catalog.getProduct(db,pathId(req),true),patch=body(req,productSchema.partial());const {id:ignoredId,color:ignoredColor,...base}=old;send(res,await catalog.saveProduct(db,pathId(req),productSchema.parse({...base,...patch}),req.identity))}))
   app.get('/api/admin/users',asyncRoute(async(req,res)=>send(res,await queries.users(db,req.query))))
@@ -83,6 +86,7 @@ export function createApp(db,options={}){
   app.use((error,req,res,next)=>{
     if(res.headersSent)return next(error)
     if(error instanceof z.ZodError)return res.status(400).json({error:{code:'INVALID_INPUT',message:'输入不符合要求，请检查必填字段和格式'}})
+    if(error instanceof multer.MulterError)return res.status(400).json({error:{code:'INVALID_IMAGE',message:error.code==='LIMIT_FILE_SIZE'?'图片不能超过 10 MB':'图片上传请求无效'}})
     if(error.type==='entity.parse.failed')return res.status(400).json({error:{code:'INVALID_JSON',message:'请求内容不是有效 JSON'}})
     const status=error.status||500
     if(status===500)console.error('API failure:',error.code||error.name)

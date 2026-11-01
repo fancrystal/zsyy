@@ -4,7 +4,7 @@ export const tables=[
   `CREATE TABLE IF NOT EXISTS admin_users (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,username VARCHAR(50) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,enabled BOOLEAN NOT NULL DEFAULT TRUE) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS user_addresses (user_id BIGINT UNSIGNED PRIMARY KEY,recipient VARCHAR(60) NOT NULL,phone VARCHAR(20) NOT NULL,detail VARCHAR(500) NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS company_profile (id INT PRIMARY KEY,content JSON NOT NULL) ENGINE=InnoDB`,
-  `CREATE TABLE IF NOT EXISTS products (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,name VARCHAR(100) NOT NULL,subtitle VARCHAR(100) NOT NULL DEFAULT '',category VARCHAR(60) NOT NULL DEFAULT '',description TEXT NOT NULL,image VARCHAR(1000) NOT NULL,price_units BIGINT NOT NULL,is_active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX(is_active,id),CHECK(price_units>0)) ENGINE=InnoDB`,
+  `CREATE TABLE IF NOT EXISTS products (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,name VARCHAR(100) NOT NULL,subtitle VARCHAR(100) NOT NULL DEFAULT '',category VARCHAR(60) NOT NULL DEFAULT '',description TEXT NOT NULL,image VARCHAR(1000) NOT NULL,detail_images JSON NOT NULL DEFAULT (JSON_ARRAY()),price_units BIGINT NOT NULL,sort_order INT NOT NULL DEFAULT 0,is_active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX(is_active,sort_order,id),CHECK(price_units>0),CHECK(sort_order>=0)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS wallets (user_id BIGINT UNSIGNED PRIMARY KEY,balance_units BIGINT NOT NULL DEFAULT 0,FOREIGN KEY(user_id) REFERENCES users(id),CHECK(balance_units>=0)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS wallet_ledger (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,user_id BIGINT UNSIGNED NOT NULL,type VARCHAR(30) NOT NULL,title VARCHAR(100) NOT NULL,note VARCHAR(500) NOT NULL,amount_units BIGINT NOT NULL,balance_before_units BIGINT NOT NULL,balance_after_units BIGINT NOT NULL,source_key VARCHAR(191) NOT NULL UNIQUE,admin_id BIGINT UNSIGNED NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(user_id) REFERENCES users(id),INDEX(user_id,id)) ENGINE=InnoDB`,
   `CREATE TABLE IF NOT EXISTS voucher_grants (id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,user_id BIGINT UNSIGNED NOT NULL,admin_id BIGINT UNSIGNED NOT NULL,amount_units BIGINT NOT NULL,note VARCHAR(500) NOT NULL,idempotency_key VARCHAR(80) NOT NULL,request_hash VARCHAR(64) NOT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(admin_id,idempotency_key),FOREIGN KEY(user_id) REFERENCES users(id)) ENGINE=InnoDB`,
@@ -25,5 +25,10 @@ export async function migrate(db){
   for(const [name,type] of Object.entries(columns)){
     const [found]=await db.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=\'job_runs\' AND COLUMN_NAME=?',[name])
     if(!found.length)await db.query(`ALTER TABLE job_runs ADD COLUMN ${name} ${type}`)
+  }
+  const productColumns={detail_images:'JSON NOT NULL DEFAULT (JSON_ARRAY())',sort_order:'INT NOT NULL DEFAULT 0'}
+  for(const [name,type] of Object.entries(productColumns)){
+    const [found]=await db.execute('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=\'products\' AND COLUMN_NAME=?',[name])
+    if(!found.length)await db.query(`ALTER TABLE products ADD COLUMN ${name} ${type}`)
   }
 }

@@ -187,6 +187,25 @@ test('product and user filters, company images and actual task records are avail
   assert.equal((await admin.put('/api/admin/company').send({name:'测试商城',tagline:'测试品牌',intro:'公司简介',body:'公司正文',images:['/images/shampoo.png']})).status,200)
   assert.deepEqual((await request(app).get('/api/company')).body.data.images,['/images/shampoo.png'])
 })
+test('product detail images and sorting are saved for admin and public catalog views',async()=>{
+  const created=await admin.post('/api/admin/products').send({name:'详情图排序商品',subtitle:'测试规格',category:'营养健康',description:'详情图测试商品',image:'/images/shampoo.png',detailImages:['/images/natto-fresh-long.jpg','/images/acid-light-long.jpg'],priceUnits:12800,sortOrder:9,active:true})
+  assert.equal(created.status,201,JSON.stringify(created.body))
+  assert.deepEqual(created.body.data.detailImages,['/images/natto-fresh-long.jpg','/images/acid-light-long.jpg'])
+  assert.equal(created.body.data.sortOrder,9)
+  const catalog=(await request(app).get('/api/products?keyword=详情图排序商品')).body.data
+  assert.equal(catalog.items[0].id,created.body.data.id)
+  assert.deepEqual(catalog.items[0].detailImages,['/images/natto-fresh-long.jpg','/images/acid-light-long.jpg'])
+  assert.equal(catalog.items[0].sortOrder,9)
+  assert.equal((await admin.post('/api/admin/products').send({name:'非法详情图',image:'/images/shampoo.png',priceUnits:1,detailImages:['invalid-url'],sortOrder:-1,active:true})).status,400)
+})
+test('product image upload stores an allowed image at a stable path',async()=>{
+  const uploaded=await admin.post('/api/admin/product-images').attach('image',Buffer.from('fake-png'),{filename:'cover.png',contentType:'image/png'})
+  assert.equal(uploaded.status,201,JSON.stringify(uploaded.body))
+  assert.match(uploaded.body.data.url,/^\/images\/uploads\/[a-f0-9-]+\.png$/)
+  assert.equal((await request(app).get(uploaded.body.data.url)).status,200)
+  assert.equal((await admin.post('/api/admin/product-images').attach('image',Buffer.from('not-an-image'),{filename:'bad.txt',contentType:'text/plain'})).status,400)
+  assert.equal((await request(app).post('/api/admin/product-images').attach('image',Buffer.from('fake-png'),{filename:'cover.png',contentType:'image/png'})).status,401)
+})
 test('initialization repairs interrupted account setup without resetting existing account money',async()=>{
   const member=await register('repair-member');await grant(member.user.id,77700)
   await db.execute('DELETE FROM wallets WHERE user_id=?',[member.user.id]);await db.execute('DELETE FROM rebate_accounts WHERE user_id=?',[member.user.id])
