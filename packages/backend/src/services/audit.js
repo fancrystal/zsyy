@@ -8,6 +8,8 @@ export async function auditAccount(conn,userId){
   const wallet=await one(conn,'SELECT balance_units FROM wallets WHERE user_id=?',[userId])
   if(!wallet||BigInt(wallet.balance_units)!==balance)await record('wallet_balance',balance,wallet?.balance_units??'missing')
   for(const [list,prefix,field,sign,type] of [[orders,'order','total_units',-1n,'order_spend'],[grants,'grant','amount_units',1n,'admin_grant'],[rebates,'rebate','granted_units',1n,'team_rebate']])for(const item of list)sources.set(`${prefix}:${item.id}`,{amount:BigInt(item[field])*sign,type})
+  const withdrawals=await rows(conn,'SELECT id,amount_units,fee_units,net_units,status FROM withdrawals WHERE user_id=?',[userId])
+  for(const w of withdrawals){const amount=BigInt(w.amount_units);if(amount<5000n||amount%5000n!==0n||BigInt(w.fee_units)!==amount*6n/100n||BigInt(w.net_units)!==amount-BigInt(w.fee_units))await record('withdrawal_source','valid amounts',String(w.id));sources.set(`withdrawal:${w.id}`,{amount:-amount,type:'withdrawal'});if(w.status==='rejected')sources.set(`withdrawal:${w.id}:refund`,{amount,type:'withdrawal_refund'})}
   for(const reward of directRewards){
     const expected=BigInt(reward.order_total_units)*BigInt(reward.rate_bps)/10000n
     if(String(reward.order_buyer_id)!==String(reward.buyer_user_id)||BigInt(reward.order_total_units_actual)!==BigInt(reward.order_total_units)||String(reward.buyer_parent_id)!==String(reward.beneficiary_user_id)||Number(reward.rate_bps)!==2000||BigInt(reward.reward_units)!==expected)await record('direct_referral_source','matching order and direct parent',String(reward.id))

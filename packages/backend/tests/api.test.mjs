@@ -37,6 +37,37 @@ before(async()=>{
   invite=(await root.get('/api/me')).body.data.inviteCode
 })
 after(async()=>{await db?.end()})
+test('withdrawal deducts once, records 6% fee and refunds a rejected request',async()=>{
+  const {agent,user}=await register('withdrawal-member');await grant(user.id,10000)
+  const requestId=key(),payload={amountUnits:10000,accountName:'测试用户',account:'test@example.com',password:pass}
+  const first=await agent.post('/api/withdrawals').set('Idempotency-Key',requestId).send(payload)
+  assert.equal(first.status,201,JSON.stringify(first.body))
+  assert.equal(first.body.data.feeUnits,600);assert.equal(first.body.data.netUnits,9400)
+  assert.equal((await agent.post('/api/withdrawals').set('Idempotency-Key',requestId).send(payload)).status,200)
+  assert.equal((await agent.get(`/api/withdrawals/request/${requestId}`)).body.data.exists,true)
+  assert.equal((await agent.get('/api/me/wallet')).body.data.balanceUnits,0)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${first.body.data.id}/reject`).send({reason:'信息错误'})).status,200)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${first.body.data.id}/reject`).send({reason:'信息错误'})).status,409)
+  assert.equal((await agent.get('/api/me/wallet')).body.data.balanceUnits,10000)
+})
+test('withdrawal validates amounts and protects proof until payment',async()=>{
+  const {agent,user}=await register('withdrawal-paid');const other=await register('withdrawal-other');await grant(user.id,20000)
+  const payload={amountUnits:5001,accountName:'测试用户',account:'test@example.com',password:pass}
+  assert.equal((await agent.post('/api/withdrawals').set('Idempotency-Key',key()).send(payload)).status,400)
+  payload.amountUnits=5000;payload.password='wrong';assert.equal((await agent.post('/api/withdrawals').set('Idempotency-Key',key()).send(payload)).status,401);payload.password=pass
+  const idempotencyKey=key(),responses=await Promise.all([agent.post('/api/withdrawals').set('Idempotency-Key',idempotencyKey).send(payload),agent.post('/api/withdrawals').set('Idempotency-Key',idempotencyKey).send(payload)])
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,201]);const id=responses[0].body.data.id
+  assert.equal((await agent.get('/api/me/wallet')).body.data.balanceUnits,15000)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${id}/approve`).send({})).status,200)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${id}/paid`).send({transferNote:'流水'})).status,409)
+  const png=Buffer.from('89504e470d0a1a0a00000000','hex')
+  assert.equal((await admin.post(`/api/admin/withdrawals/${id}/proof`).set('Content-Type','image/png').send(png)).status,200)
+  assert.equal((await agent.get(`/api/withdrawals/${id}/proof`)).status,404)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${id}/paid`).send({transferNote:'流水'})).status,200)
+  assert.equal((await other.agent.get(`/api/withdrawals/${id}/proof`)).status,404)
+  assert.equal((await agent.get(`/api/withdrawals/${id}/proof`)).status,200)
+  assert.equal((await admin.post(`/api/admin/withdrawals/${id}/reject`).send({reason:'重复'})).status,409)
+})
 test('income records aggregate all credited rewards and paginate categories independently',async()=>{
   const {agent,user}=await register('income-owner')
   const other=await register('income-other')

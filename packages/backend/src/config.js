@@ -4,10 +4,11 @@ dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) }
 export const config={
   port:Number(process.env.PORT||3000), database:process.env.DB_NAME||'zsyy_dev',testDatabase:process.env.TEST_DB_NAME||'zsyy_test',
   host:process.env.DB_HOST||'127.0.0.1',dbPort:Number(process.env.DB_PORT||3308),user:process.env.DB_USER||'zsyy',password:process.env.DB_PASSWORD,
-  userSecret:process.env.JWT_USER_SECRET,adminSecret:process.env.JWT_ADMIN_SECRET,productImageDir:process.env.PRODUCT_IMAGE_DIR||fileURLToPath(new URL('../../mobile-h5/public/images/uploads/',import.meta.url)),production:process.env.NODE_ENV==='production'
+  userSecret:process.env.JWT_USER_SECRET,adminSecret:process.env.JWT_ADMIN_SECRET,withdrawalSecret:process.env.WITHDRAWAL_ENCRYPTION_KEY,productImageDir:process.env.PRODUCT_IMAGE_DIR||fileURLToPath(new URL('../../mobile-h5/public/images/uploads/',import.meta.url)),production:process.env.NODE_ENV==='production'
 }
 export function validateConfig(){
   for(const value of [config.userSecret,config.adminSecret]) if(!value||value.length<32||value.startsWith('replace-')) throw new Error('Configure distinct random JWT secrets of at least 32 characters in .env')
   if(config.userSecret===config.adminSecret) throw new Error('User and administrator JWT secrets must be different')
+  if(config.production&&(!config.withdrawalSecret||config.withdrawalSecret.length<32||config.withdrawalSecret===config.userSecret||config.withdrawalSecret===config.adminSecret))throw new Error('Configure a separate durable WITHDRAWAL_ENCRYPTION_KEY of at least 32 characters')
   if(!config.password) throw new Error('DB_PASSWORD must be configured')
 }

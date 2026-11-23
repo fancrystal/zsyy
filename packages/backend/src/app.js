@@ -10,6 +10,7 @@ import * as accounts from './services/accounts.js'
 import * as catalog from './services/catalog.js'
 import * as accounting from './services/accounting.js'
 import * as queries from './services/queries.js'
+import * as withdrawals from './services/withdrawals.js'
 import { reconcile } from './services/reconcile.js'
 import multer from 'multer'
 import { uploadProductImage, uploadedImageUrl, publishUploadedImage } from './services/product-images.js'
@@ -58,12 +59,22 @@ export function createApp(db,options={}){
   app.use('/api/transfers',requireRole('user'))
   app.get('/api/transfers',asyncRoute(async(req,res)=>send(res,await queries.transfers(db,req.identity,req.query))))
   app.post('/api/transfers',asyncRoute(async(req,res)=>{const input=body(req,z.object({recipientPhone:z.string().trim().regex(/^1[3-9]\d{9}$/),amountUnits:money,note:z.string().trim().max(500).default('')}).strict());const data=await accounting.transfer(db,req.identity,input,key(req));send(res,data,data.replayed?200:201)}))
+  app.use('/api/withdrawals',requireRole('user'))
+  app.post('/api/withdrawals',limiter,asyncRoute(async(req,res)=>{const input=body(req,z.object({amountUnits:money,accountName:text(60),account:text(200),password:z.string().min(1).max(72)}).strict());const data=await withdrawals.apply(db,req.identity,input,key(req),config.withdrawalSecret||secrets.user);send(res,data,data.replayed?200:201)}))
+  app.get('/api/withdrawals',asyncRoute(async(req,res)=>send(res,await withdrawals.list(db,req.query,req.identity))))
+  app.get('/api/withdrawals/request/:requestKey',asyncRoute(async(req,res)=>send(res,await withdrawals.byRequest(db,req.identity,text(80).parse(req.params.requestKey)))))
+  app.get('/api/withdrawals/:id/proof',asyncRoute(async(req,res)=>{const file=await withdrawals.proof(db,pathId(req),req.identity);res.set('X-Content-Type-Options','nosniff').type(file.proof_type).send(file.proof)}))
   app.use('/api/orders',requireRole('user'))
   app.get('/api/orders',asyncRoute(async(req,res)=>send(res,await accounting.listOrders(db,req.query,req.identity))))
   app.get('/api/orders/:id',asyncRoute(async(req,res)=>send(res,await accounting.getOrder(db,pathId(req),req.identity))))
   app.post('/api/orders',asyncRoute(async(req,res)=>{const input=body(req,z.object({productId:id,quantity:z.number().int().min(1).max(999),expectedPriceUnits:money}).strict());const data=await accounting.purchase(db,req.identity,input,key(req));send(res,data,data.replayed?200:201)}))
   app.use('/api/admin',requireRole('admin'))
   app.get('/api/admin/me',asyncRoute(async(req,res)=>send(res,await one(db,'SELECT CAST(id AS CHAR) AS id,username FROM admin_users WHERE id=?',[req.identity]))))
+  app.get('/api/admin/withdrawals',asyncRoute(async(req,res)=>send(res,await withdrawals.list(db,req.query))))
+  app.get('/api/admin/withdrawals/:id/account',asyncRoute(async(req,res)=>send(res,await withdrawals.account(db,pathId(req),config.withdrawalSecret||secrets.user))))
+  app.get('/api/admin/withdrawals/:id/proof',asyncRoute(async(req,res)=>{const file=await withdrawals.proof(db,pathId(req));res.set('X-Content-Type-Options','nosniff').type(file.proof_type).send(file.proof)}))
+  app.post('/api/admin/withdrawals/:id/proof',express.raw({type:['image/jpeg','image/png','image/webp'],limit:'5mb'}),asyncRoute(async(req,res)=>{const b=req.body,t=req.get('Content-Type');if(!Buffer.isBuffer(b)||!((t==='image/jpeg'&&b.subarray(0,3).equals(Buffer.from('ffd8ff','hex')))||(t==='image/png'&&b.subarray(0,8).equals(Buffer.from('89504e470d0a1a0a','hex')))||(t==='image/webp'&&b.subarray(0,4).toString()==='RIFF'&&b.subarray(8,12).toString()==='WEBP')))fail(400,'INVALID_IMAGE','图片格式无效');send(res,await withdrawals.saveProof(db,pathId(req),b,t))}))
+  for(const action of ['approve','reject','paid'])app.post(`/api/admin/withdrawals/:id/${action}`,asyncRoute(async(req,res)=>{const schema=action==='reject'?z.object({reason:text(500)}).strict():action==='paid'?z.object({transferNote:text(500)}).strict():z.object({}).strict();send(res,await withdrawals.action(db,pathId(req),req.identity,action,body(req,schema)))}))
   app.get('/api/admin/overview',asyncRoute(async(req,res)=>send(res,await queries.overview(db))))
   app.get('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.getCompany(db))))
   app.put('/api/admin/company',asyncRoute(async(req,res)=>send(res,await catalog.saveCompany(db,body(req,z.object({name:text(40),tagline:text(60),intro:text(2000),body:z.string().max(10000),images:z.array(image).max(10).default([])}).strict()),req.identity))))
